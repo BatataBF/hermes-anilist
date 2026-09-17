@@ -156,6 +156,18 @@ const STRINGS = {
     alertsHostUnreachable: (host) => `Could not reach ${host}.`,
     alertRunFailed: 'last run failed',
     alertBlocked: 'blocked by host config',
+    digestTitle: 'Daily digest',
+    digestHint: (count) => `One message a day with what airs from your list (${count} shows).`,
+    digestHour: 'At',
+    digestAt: (hour) => `${String(hour).padStart(2, '0')}:00`,
+    digestArm: 'Arm the digest',
+    digestJobName: 'Daily digest',
+    // What the job runs, wherever it runs: the ids are baked in because that host
+    // may not have this plugin — the public API is all it needs.
+    digestPrompt: (ids) =>
+      `Anime digest for today. Ask the public AniList API (POST https://graphql.anilist.co, no auth needed) about these ids: ${ids}. ` +
+      `Report the episodes that air TODAY; if none do, say so and name tomorrow's. One line per show: title, episode number, local time, ` +
+      `and https://anilist.co/anime/<id>. If nothing airs, reply exactly: Nothing from your list airs today.`,
     // What the cron job runs: a prompt the agent acts on at airing time.
     alertPrompt: (title, episode, url) =>
       `Tell me right away: ${title} — episode ${episode} has just aired. Details: ${url}`,
@@ -271,6 +283,18 @@ const STRINGS = {
     alertsHostUnreachable: (host) => `No pude consultar ${host}.`,
     alertRunFailed: 'la última corrida falló',
     alertBlocked: 'bloqueado por la config del host',
+    digestTitle: 'Resumen diario',
+    digestHint: (count) => `Un mensaje al día con lo que sale de tu lista (${count} series).`,
+    digestHour: 'A las',
+    digestAt: (hour) => `${String(hour).padStart(2, '0')}:00`,
+    digestArm: 'Armar el resumen',
+    digestJobName: 'Resumen diario',
+    // Lo que corre el job, donde sea que corra: los ids van incrustados porque ese
+    // host puede no tener el plugin — la API pública es todo lo que necesita.
+    digestPrompt: (ids) =>
+      `Resumen de anime de hoy. Consultá la API pública de AniList (POST https://graphql.anilist.co, sin autenticación) para estos ids: ${ids}. ` +
+      `Reportá los episodios que salen HOY; si no sale ninguno, decilo y nombra los de mañana. Una línea por serie: título, número de episodio, ` +
+      `hora local y https://anilist.co/anime/<id>. Si no sale nada, respondé exactamente: Hoy no sale nada de tu lista.`,
     // Lo que corre el cronjob: un prompt que el agente ejecuta al airear.
     alertPrompt: (title, episode, url) =>
       `Avisame al toque: ${title} — el episodio ${episode} acaba de salir al aire. Ficha: ${url}`,
@@ -349,12 +373,19 @@ const WINDOW_DAYS = [3, 7, 14]
 // channels a gateway box may have configured.
 const ALERT_DELIVERIES = ['local', 'telegram', 'discord']
 const DELIVERY_NAMES = { telegram: 'Telegram', discord: 'Discord' }
+// The daily digest is a cron job of its own, in the same store: a cron expression
+// (unlike an ISO one-shot) is stable, so re-reading it never has to guess.
+const DIGEST_PREFIX = '[anilist:digest]'
+const DIGEST_HOURS = [8, 9, 12, 20]
+// A completed or dropped show cannot air; everything else can.
+const DIGEST_STATUSES = ['watching', 'rewatching', 'paused', 'planned', 'planning']
 const DEFAULT_SETTINGS = {
   covers: true,
   defaultFilter: 'week',
   titleLanguage: 'english',
   windowDays: 7,
-  alertDelivery: 'telegram'
+  alertDelivery: 'telegram',
+  digestHour: 9
 }
 
 /** Whatever a previous version (or a hand-edited localStorage) left: keep the shape. */
@@ -374,7 +405,10 @@ function normalizeSettings(raw) {
       : DEFAULT_SETTINGS.windowDays,
     alertDelivery: ALERT_DELIVERIES.includes(stored.alertDelivery)
       ? stored.alertDelivery
-      : DEFAULT_SETTINGS.alertDelivery
+      : DEFAULT_SETTINGS.alertDelivery,
+    digestHour: DIGEST_HOURS.includes(Number(stored.digestHour))
+      ? Number(stored.digestHour)
+      : DEFAULT_SETTINGS.digestHour
   }
 }
 
@@ -1335,6 +1369,177 @@ function alertRouteLabel(route, job, t) {
   return channel ? `${where} · ${DELIVERY_NAMES[channel] || channel}` : where
 }
 
+// ─── daily digest ───────────────────────────────────────────────────────────
+
+function isDigest(job) {
+  return String((job && job.name) || '').toLowerCase().startsWith(DIGEST_PREFIX)
+}
+
+/**
+ * The ids the digest should ask about: what can still air.
+ *
+ * The prompt carries them because the job runs on whichever host the reader
+ * picked, and that host may not have this plugin installed — so the prompt has to
+ * stand on its own (the public API, no tool of ours to promise). A list of ids is
+ * also the smallest form that survives titles changing.
+ */
+function digestIds(entries) {
+  return (entries || [])
+    .filter((entry) => !entry.status || DIGEST_STATUSES.includes(String(entry.status)))
+    .map((entry) => Number(entry.id))
+    .filter((id) => Number.isFinite(id))
+}
+
+/** `0 9 * * *` — the one schedule form that reads back exactly as written. */
+function digestSchedule(hour) {
+  return `0 ${Number(hour) || DEFAULT_SETTINGS.digestHour} * * *`
+}
+
+function digestJobName(t, hour) {
+  return `${DIGEST_PREFIX} ${t('digestJobName')} — ${String(hour).padStart(2, '0')}:00`
+}
+
+function createDigest(source, t, ids, route, deliver, hour) {
+  return writeAlert(source, () =>
+    cronCall(route, {
+      action: 'add',
+      name: digestJobName(t, hour),
+      schedule: digestSchedule(hour),
+      prompt: t('digestPrompt', ids.join(', ')),
+      deliver
+    })
+  )
+}
+
+/**
+ * One message a day with what airs from the reader's list.
+ *
+ * A cron job like an alert — same store, same destination, same delivery target —
+ * but recurring, and its schedule is a cron expression so the app's own editor can
+ * read it back instead of guessing at a display string. The ids are baked in when
+ * it is armed: re-arm to refresh them.
+ */
+function DigestPanel() {
+  const t = usePluginI18n(ID)
+  const source = useSource()
+  const alerts = useAlerts()
+  const destinations = useDestinations()
+  const tracked = useTracked()
+  const settings = useValue($settings)
+  const routes = destinations.data || []
+  const [chosen, setChosen] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState(null)
+  const ids = digestIds(tracked.entries)
+  const armed = ((alerts.data && alerts.data.items) || []).find((item) => isDigest(item.job)) || null
+  const active = routes.find((route) => routeId(route) === chosen) || routes[0] || null
+  const remote = !!active && active.mode !== 'local'
+  const deliver = remote ? settings.alertDelivery : 'local'
+  const run = (work) => {
+    setBusy(true)
+    setFailure(null)
+
+    return work()
+      .catch((error) => setFailure(error))
+      .finally(() => setBusy(false))
+  }
+
+  return jsxs('div', {
+    className: 'flex flex-col gap-2',
+    children: [
+      jsx('div', {
+        className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+        children: t('digestTitle')
+      }),
+      jsx('div', {
+        className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
+        children: t('digestHint', ids.length)
+      }),
+      armed
+        ? jsxs('div', {
+            className: 'flex flex-wrap items-center gap-2',
+            children: [
+              jsx(Badge, { variant: 'muted', children: runAtLabel(armed.job.next_run_at, t) }),
+              jsx('span', {
+                className: 'truncate text-[0.6875rem] text-(--ui-text-quaternary)',
+                children: alertRouteLabel(armed.route, armed.job, t)
+              }),
+              jsx(Button, {
+                type: 'button',
+                variant: 'ghost',
+                size: 'sm',
+                disabled: busy,
+                onClick: () => {
+                  haptic('tap')
+                  void run(() => dropAlert(source, armed.job, armed.route))
+                },
+                children: t('alertRemove')
+              })
+            ]
+          })
+        : jsxs('div', {
+            className: 'flex flex-col gap-2',
+            children: [
+              jsx(SettingsRow, {
+                label: t('digestHour'),
+                children: jsx(SegmentedControl, {
+                  onChange: (hour) => {
+                    haptic('selection')
+                    saveSettings({ digestHour: Number(hour) })
+                  },
+                  options: DIGEST_HOURS.map((hour) => ({ id: String(hour), label: t('digestAt', hour) })),
+                  value: String(settings.digestHour)
+                })
+              }),
+              routes.length > 1
+                ? jsx(SettingsRow, {
+                    label: t('alertDestination'),
+                    children: jsx(SegmentedControl, {
+                      onChange: (next) => {
+                        haptic('selection')
+                        setChosen(next)
+                      },
+                      options: routes.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
+                      value: routeId(active)
+                    })
+                  })
+                : null,
+              remote
+                ? jsx(SettingsRow, {
+                    label: t('alertDeliveryLabel'),
+                    children: jsx(SegmentedControl, {
+                      onChange: (next) => {
+                        haptic('selection')
+                        saveSettings({ alertDelivery: next })
+                      },
+                      options: ALERT_DELIVERIES.map((id) => ({
+                        id,
+                        label: id === 'local' ? t('deliverLocal') : DELIVERY_NAMES[id] || id
+                      })),
+                      value: settings.alertDelivery
+                    })
+                  })
+                : null,
+              jsx(Button, {
+                type: 'button',
+                variant: 'ghost',
+                size: 'sm',
+                disabled: busy || !active || ids.length === 0,
+                onClick: () => {
+                  haptic('tap')
+                  void run(() => createDigest(source, t, ids, active, deliver, settings.digestHour))
+                },
+                children: t('digestArm')
+              })
+            ]
+          }),
+      failure
+        ? jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-quaternary)', children: t('alertFailed') })
+        : null
+    ]
+  })
+}
+
 /**
  * The alert for the next episode, on the show's own page — and the host it should
  * run on.
@@ -1893,6 +2098,10 @@ function SettingsPanel() {
       // Alerts are cron jobs in the profile's own store — same class of thing:
       // real state that lives outside the plugin, with a list worth showing.
       jsx(AlertsPanel, {}),
+      jsx(Separator, {}),
+      // The digest is the other half of the same idea: a job this plugin owns,
+      // in the profile's own store, delivering where the reader chose.
+      jsx(DigestPanel, {}),
       jsx(Separator, {}),
       jsx(SettingsRow, {
         label: t('settingTitleLanguage'),

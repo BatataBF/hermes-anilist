@@ -28,6 +28,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   past — a mask, so the same rule reads right in a light and a dark theme — with a *Read more* when it
   genuinely overflows. Never a fade or a button that implies text which is not there. The gap next to
   the art was room the page already had, and the schedule no longer sits below a wall of prose.
+- **The status-bar chip reads like a status item**: it wears an icon — a clock, or a broadcast mark
+  once its episode is within the hour — the countdown is the brightest thing in it, and the label is
+  the same small-caps `ANILIST` the app's own items use.
 - **The popover's second door goes to Settings.** *Search a show* sent the reader out of the feed and
   then hunting for a search box; the button opens Settings now, where every preference lives. Search
   stays in the workspace's Catalog tab and in the command palette.

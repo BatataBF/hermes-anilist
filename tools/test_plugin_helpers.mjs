@@ -50,7 +50,7 @@ const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
   'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
-  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle',
+  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon',
   'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring'
 ]
 
@@ -318,6 +318,18 @@ test('a synopsis that runs past the clip fades out to say so', () => {
 test('an open synopsis is neither clipped nor faded', () => {
   assert.equal(helpers.synopsisStyle(true, true), undefined)
   assert.equal(helpers.synopsisStyle(true, false), undefined)
+})
+
+// ─── the status-bar chip ────────────────────────────────────────────────────
+
+test('the chip wears a broadcast mark once its episode is within the hour', () => {
+  const now = wall(2026, 8, 18, 10, 0)
+
+  assert.equal(helpers.chipIcon(now + 3600, now), 'broadcast')
+  assert.equal(helpers.chipIcon(now + 3601, now), 'clock')
+  assert.equal(helpers.chipIcon(now - 60, now), 'broadcast', 'already airing reads the same way')
+  assert.equal(helpers.chipIcon(null, now), 'clock', 'nothing scheduled is never "on air"')
+  assert.equal(helpers.chipIcon(undefined, now), 'clock')
 })
 
 if (failed) {

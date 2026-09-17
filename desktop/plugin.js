@@ -22,6 +22,7 @@
 import {
   Badge,
   Button,
+  Codicon,
   ConfirmDialog,
   EmptyState,
   ErrorState,
@@ -411,6 +412,11 @@ function countdown(airingAt, t) {
   if (d > 0) return t('inDays', d, h)
   if (h > 0) return t('inHours', h, minutes % 60)
   return t('inMinutes', minutes)
+}
+
+/** The clock face the chip wears: on air within the hour, or something still to wait for. */
+function chipIcon(airingAt, now = Date.now() / 1000) {
+  return airingAt && airingAt - now <= 3600 ? 'broadcast' : 'clock'
 }
 
 /** 404 from ctx.rest means the Python half is not mounted on this agent. */
@@ -3642,6 +3648,8 @@ function NextChip() {
   const next = items[0]
   // A bare countdown says how long, not what for.
   const nextTitle = next ? titleOf(next, titleLanguage) : ''
+  // Within the hour the chip stops being a postcard and starts being a notice.
+  const imminent = !!next && next.airingAt - Date.now() / 1000 <= 3600
 
   return jsx(Popover, {
     open,
@@ -3653,16 +3661,31 @@ function NextChip() {
           type: 'button',
           title: next ? `${nextTitle} — ${countdown(next.airingAt, t)}` : t('chipLabel'),
           className: cn(
-            'inline-flex h-full items-center gap-1 px-1.5 text-[0.6875rem] transition-colors',
-            'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
+            'inline-flex h-full items-center gap-1.5 px-1.5 text-[0.6875rem] transition-colors',
+            'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
           ),
           onClick: () => haptic('tap'),
           children: [
-            jsx('span', { children: 'anilist' }),
+            // The bar's other items are plain words; this one carries a time, so it
+            // wears an icon and keeps that time the brightest mark in the chip.
+            jsx(Codicon, {
+              name: chipIcon(next && next.airingAt),
+              size: '0.75rem',
+              className: cn('shrink-0', imminent && 'text-(--ui-text-primary)')
+            }),
+            jsx('span', {
+              className: 'text-[0.625rem] uppercase tracking-wide opacity-60',
+              children: 'anilist'
+            }),
             // Named, not just counted down to. Truncation is inline because the
             // compiled Tailwind carries no arbitrary max-width.
             next ? jsx('span', { className: 'truncate', style: { maxWidth: '9rem' }, children: nextTitle }) : null,
-            next ? jsx('span', { children: countdown(next.airingAt, t) }) : null
+            next
+              ? jsx('span', {
+                  className: cn('shrink-0 font-medium tabular-nums', imminent && 'text-(--ui-text-primary)'),
+                  children: countdown(next.airingAt, t)
+                })
+              : null
           ]
         })
       }),

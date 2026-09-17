@@ -83,14 +83,14 @@ const grabConst = (name) => {
 const FUNCTIONS = [
   'countdown', 'dayKey', 'dayLabel', 'airedDate', 'clockTime', 'episodeWhen', 'monthHeading',
   'nextAiring', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'airingWhen',
-  'Fold', 'DayCell', 'EpisodeCalendar', 'EpisodeTable', 'StatusSelect'
+  'Synopsis', 'DayCell', 'EpisodeCalendar', 'EpisodeTable', 'StatusSelect'
 ]
-const CONSTS = ['STRINGS']
+const CONSTS = ['STRINGS', 'SYNOPSIS_CLAMP']
 
 /** The kit, stubbed: every component keeps its children so the tree is assertable. */
 const STUBS = `
 const { jsx, jsxs } = globalThis.__anilist__
-const { useState, useEffect } = globalThis.__anilistReact__
+const { useState, useEffect, useRef } = globalThis.__anilistReact__
 
 const element = (name) => (props = {}) => {
   const { children, ...rest } = props
@@ -248,16 +248,25 @@ test('the table stops offering more when there is none', () => {
   assert.equal(html.includes('Show more'), false)
 })
 
-test('the synopsis fold hides its prose until it is opened', () => {
-  const closed = render(views.Fold, { label: 'Synopsis', open: false, onToggle: () => {}, children: 'Luck, an S-rank mage…' })
+test('the synopsis sits clipped beside the cover, under its own label', () => {
+  const html = render(views.Synopsis, {
+    text: 'Luck, an S-rank mage in the hero’s party, makes a last stand against the Demon King.'
+  })
 
-  assert.match(closed, /Synopsis/)
-  assert.match(closed, /data-kit="caret"/)
-  assert.equal(closed.includes('S-rank'), false, 'closed folds hold their prose')
+  assert.match(html, /Synopsis/, 'the label names the prose')
+  assert.match(html, /max-height:6\.5rem/, 'clipped to the height of the art beside it')
+  assert.match(html, /overflow:hidden/)
+  assert.match(html, /S-rank/, 'the text itself is rendered, not folded away')
+  // The toggle is measured in the app (scrollHeight vs clientHeight); headless
+  // there is no layout to measure, so it must not appear on a guess.
+  assert.equal(html.includes('Read more'), false, 'no toggle without a measurement to prove it overflows')
+})
 
-  const open = render(views.Fold, { label: 'Synopsis', open: true, onToggle: () => {}, children: 'Luck, an S-rank mage…' })
+test('a show with no description says so instead of leaving the gap empty', () => {
+  const html = render(views.Synopsis, { text: '' })
 
-  assert.match(open, /S-rank/, 'open folds show it')
+  assert.match(html, /AniList has no description/)
+  assert.equal(html.includes('Synopsis'), false, 'and claims no section')
 })
 
 test('the status select offers AniList\'s vocabulary and shows the current value', () => {

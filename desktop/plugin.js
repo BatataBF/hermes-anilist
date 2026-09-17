@@ -23,7 +23,6 @@ import {
   Badge,
   Button,
   ConfirmDialog,
-  DisclosureCaret,
   EmptyState,
   ErrorState,
   Input,
@@ -51,7 +50,7 @@ import {
   useQuery,
   useValue
 } from '@hermes/plugin-sdk'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'hermes-anilist'
@@ -123,6 +122,8 @@ const STRINGS = {
     columnTime: 'Time',
     leftToAir: (count) => `${count} to air`,
     synopsis: 'Synopsis',
+    readMore: 'Read more',
+    readLess: 'Show less',
     noEpisodes: 'AniList has no air dates for this one.',
     noDescription: 'AniList has no description for this one yet.',
     nextEpisode: 'Next episode',
@@ -286,6 +287,8 @@ const STRINGS = {
     columnTime: 'Hora',
     leftToAir: (count) => `${count} por emitir`,
     synopsis: 'Sinopsis',
+    readMore: 'Leer más',
+    readLess: 'Mostrar menos',
     noEpisodes: 'AniList no tiene fechas de emisión para este título.',
     noDescription: 'AniList todavía no tiene descripción para este título.',
     nextEpisode: 'Próximo episodio',
@@ -2672,26 +2675,61 @@ function airingWhen(airingAt, t) {
   return `${t('dayName', at.getDay())} ${airedDate(airingAt, t)} · ${clockTime(airingAt)}`
 }
 
+/** How much synopsis fits beside the cover before it needs a "read more". */
+const SYNOPSIS_CLAMP = '6.5rem'
+
 /**
- * A folded section: the label is the affordance and the caret says which way it
- * opens. Long prose lives behind one of these so the actions and the schedule
- * keep the top of the page instead of being pushed past a wall of text.
+ * The synopsis, in the one gap this page has: beside the cover art, under the
+ * metadata. Prose belongs where the room already is, not appended to the bottom
+ * of the page where it would push the schedule further down.
+ *
+ * Clipped to the art's height with the rest one click away — and the button only
+ * appears when the text actually runs past the clip, because a "read more" that
+ * reveals nothing is worse than no button at all.
  */
-function Fold({ children, label, open, onToggle }) {
+function Synopsis({ t, text }) {
+  const [open, setOpen] = useState(false)
+  const [clipped, setClipped] = useState(false)
+  const box = useRef(null)
+
+  // Measured every render rather than on a dependency list: the pane can be
+  // resized, and a same-value setState is a no-op, so this settles immediately.
+  useEffect(() => {
+    const node = box.current
+
+    if (node && !open) setClipped(node.scrollHeight > node.clientHeight + 1)
+  })
+
+  if (!text) {
+    return jsx('div', { className: 'text-xs text-(--ui-text-quaternary)', children: t('noDescription') })
+  }
+
   return jsxs('div', {
-    className: 'flex flex-col border-t border-(--ui-stroke-secondary) pt-2',
+    className: 'flex flex-col gap-1',
     children: [
-      jsx('button', {
-        type: 'button',
-        className:
-          'flex cursor-pointer items-center gap-1.5 text-left text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary) hover:text-(--ui-text-secondary)',
-        onClick: () => {
-          haptic('tap')
-          onToggle()
-        },
-        children: [jsx(DisclosureCaret, { open }, 'caret'), jsx('span', { children: label }, 'label')]
+      jsx('div', {
+        className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+        children: t('synopsis')
       }),
-      open ? jsx('div', { className: 'pt-2', children }) : null
+      jsx('div', {
+        ref: box,
+        className: 'whitespace-pre-line break-words text-xs text-(--ui-text-secondary)',
+        style: open ? undefined : { maxHeight: SYNOPSIS_CLAMP, overflow: 'hidden' },
+        children: text
+      }),
+      clipped || open
+        ? jsx(Button, {
+            type: 'button',
+            variant: 'ghost',
+            size: 'micro',
+            className: 'self-start',
+            onClick: () => {
+              haptic('tap')
+              setOpen((prev) => !prev)
+            },
+            children: open ? t('readLess') : t('readMore')
+          })
+        : null
     ]
   })
 }
@@ -3016,13 +3054,9 @@ function DetailPanel({ compact = false }) {
   const entry = tracked.entry(mediaId)
   // What "show more" has gathered past the page that rides along with the detail.
   const [more, setMore] = useState({ hasMore: null, items: [], loading: false })
-  // Prose is folded by default — it is the longest thing on the page and the least
-  // urgent — and folding does not follow the reader to the next show.
-  const [synopsis, setSynopsis] = useState(false)
 
   useEffect(() => {
     setMore({ hasMore: null, items: [], loading: false })
-    setSynopsis(false)
   }, [mediaId])
 
   if (!mediaId) return null
@@ -3204,7 +3238,10 @@ function DetailPanel({ compact = false }) {
                       ? jsx('span', { className: 'truncate', children: show.genres.join(' · ') })
                       : null
                   ]
-                })
+                }),
+                // The gap beside the art is the only room this page has to spare,
+                // so the prose goes in it instead of pushing the schedule down.
+                jsx(Synopsis, { t, text: show.description }, `synopsis:${mediaId}`)
               ]
             })
           ]
@@ -3323,20 +3360,6 @@ function DetailPanel({ compact = false }) {
                   onClick: addToList,
                   children: t('addToList')
                 })
-        }),
-        jsx(Fold, {
-          label: t('synopsis'),
-          open: synopsis,
-          onToggle: () => setSynopsis((prev) => !prev),
-          children: show.description
-            ? jsx('div', {
-                className: 'whitespace-pre-line break-words text-xs text-(--ui-text-secondary)',
-                children: show.description
-              })
-            : jsx('div', {
-                className: 'text-xs text-(--ui-text-quaternary)',
-                children: t('noDescription')
-              })
         }),
         // The calendar first, then every episode in columns: the grid locates the
         // reader in the schedule, the table answers "and the rest?".

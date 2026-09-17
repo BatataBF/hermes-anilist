@@ -24,8 +24,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   text.
 - **The tracking status is a select**, not a six-button track — AniList's own vocabulary, and the
   same reason the alert destinations became one.
-- **The synopsis is folded by default.** It was the longest thing on the page and the least urgent;
-  AniList's own broadcast note rides inside it, where it belongs.
+- **The synopsis lives beside the cover**, clipped to the art's height with a *Read more* when it
+  actually overflows. The gap next to the art was room the page already had, and the schedule no
+  longer sits below a wall of prose. AniList's own broadcast note rides inside it.
 - **The popover's second door goes to Settings.** *Search a show* sent the reader out of the feed and
   then hunting for a search box; the button opens Settings now, where every preference lives. Search
   stays in the workspace's Catalog tab and in the command palette.

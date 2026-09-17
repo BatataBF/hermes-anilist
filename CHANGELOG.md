@@ -187,13 +187,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 - **Tracking from the feed itself.** Every row (feed, season and search) carries a star that adds or
   removes the show, and its badge reads `EP 7/12` when AniList knows the show's length. A third
-  filter, **Mi lista**, narrows the feed to what is being tracked — their next 7 days are a handful
+  filter, **My list**, narrows the feed to what is being tracked — their next 7 days are a handful
   of episodes, not a hundred.
 - **A show detail view.** Any title opens it in the workspace tab: cover, format, status, length,
   duration, score, studio, genres, the next episode's countdown, the description as text, the
-  episode list with its own **Ver más** (paged on top of the first 25 that ride along with the
+  episode list with its own **Show more** (paged on top of the first 25 that ride along with the
   detail), and the tracking controls — status among AniList's five, progress ±, remove. The tab strip
-  keeps showing *Upcoming* while drilled in, and *Volver* goes back to the feed.
+  keeps showing *Upcoming* while drilled in, and *Back* goes back to the feed.
 - **A local watchlist** (`GET/PUT/DELETE /watchlist`), stored in the plugin's own profile-scoped
   state (`ctx.state` → `~/.hermes/plugin-data/<namespace>/state.json`), so it survives restarts, is
   visible to the backend, and is ready for the episode alerts of L4. Statuses are AniList's own
@@ -212,11 +212,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   route mounting are separate startup steps whose order is not ours to depend on.
 
 - **Day separators in the multi-day view.** The upcoming list groups by *local* calendar day, headed
-  by *Hoy* / *Mañana* / *Dom 20* and closed with the kit's `Separator`. Grouping is presentation
+  by *Today* / *Tomorrow* / *Fri 19* and closed with the kit's `Separator`. Grouping is presentation
   only — the feed, its order and the AniList budget are untouched — and the single-day filter stays
   a flat list, where a header would only repeat the filter itself.
 
-- **A "Ver más" footer** under the multi-day list, shown only when the feed really is truncated (the
+- **A "Show more" footer** under the multi-day list, shown only when the feed really is truncated (the
   page cap) with a hint naming the window. The panel merges the deeper page onto the rows on screen,
   deduped by episode and re-sorted — a refetch can slide the window forward, so a row can show up in
   both halves. It is hidden in the single-day filter, where the deeper page lands past midnight and
@@ -233,7 +233,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   `MAX_AIRING_PAGES`) into one cached feed, so the sections now reach day 7. `hasNextPage` means
   "there is more than I returned" rather than "AniList had another page", and the page size went
   40 → 50 because the cap is what actually bounds a refresh, not the size of each step.
-- `/airing` takes `after=<unix seconds>`: the cursor behind **Ver más**, returning episodes strictly
+- `/airing` takes `after=<unix seconds>`: the cursor behind **Show more**, returning episodes strictly
   after the last row on screen. The cursor keys the cache (not the wall clock), so two clicks a
   second apart cost one request, and a stale cursor never re-fetches the past.
 
@@ -244,7 +244,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   "the buttons are missing" — and since a *tracked* row was the only one whose star ever showed, the
   feature looked like it existed only for today. Both are always visible now, muted until tracked or
   pointed at.
-- **A day header past tomorrow read `E 19` instead of `Sáb 19`.** The weekday names were registered
+- **A day header past tomorrow rendered `E 19` instead of a weekday name.** The names were registered
   as an array, but a plugin i18n value is only ever `string | ((...args) => string)` — anything else
   resolves back to the key itself, so `t('dayNames')` handed back the string `"dayNames"` and the
   code indexed *that* (`"dayNames"[6]` → `e`, upper-cased by the header's `uppercase`). The names
@@ -254,13 +254,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
-- **A settings view**, reachable from the shared view switcher (Próximos · Temporadas · Ajustes) in
+- **A settings view**, reachable from the shared view switcher (Upcoming · Catalog · Settings) in
   both the popover and the workspace tab, and from the palette (`AniList: Settings`). Preferences are
   client-side and per install (`ctx.storage`), so none of them needs a gateway round trip:
   **title language** (English / Romaji / Native), **feed window** (3 / 7 / 14 days, which the airing
   query honors), **filter** (the popover's control and the settings row deliberately write the same
   value — what you pick in passing is what the next open remembers) and **cover art** on or off.
-- The popover **names its views**: the switcher spells out Próximos, Temporadas and Ajustes instead
+- The popover **names its views**: the switcher spells out Upcoming, Catalog and Settings instead
   of hiding them behind a glyph.
 
 ### Changed
@@ -273,9 +273,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
-- **A window filter on the upcoming list** — `Hoy` / `7 días`, as a `SegmentedControl` beside the
+- **A window filter on the upcoming list** — `Today` / `7 days`, as a `SegmentedControl` beside the
   section title. The feed is always fetched as a seven-day window and narrowing happens
-  client-side, so flipping the filter back and forth never spends AniList budget. `Hoy` ends at the
+  client-side, so flipping the filter back and forth never spends AniList budget. `Today` ends at the
   user's own midnight (not UTC's), and an episode that has just started still counts as today —
   its row says "airing now".
 

@@ -153,6 +153,7 @@ const STRINGS = {
     destinationLocal: 'This device',
     alertDeliveryLabel: 'Notify via',
     deliverLocal: 'in the app',
+    settingAlertRoute: 'Default destination',
     alertsHostUnreachable: (host) => `Could not reach ${host}.`,
     alertRunFailed: 'last run failed',
     alertBlocked: 'blocked by host config',
@@ -282,6 +283,7 @@ const STRINGS = {
     destinationLocal: 'Este equipo',
     alertDeliveryLabel: 'Avisarme por',
     deliverLocal: 'en la app',
+    settingAlertRoute: 'Destino por defecto',
     alertsHostUnreachable: (host) => `No pude consultar ${host}.`,
     alertRunFailed: 'la última corrida falló',
     alertBlocked: 'bloqueado por la config del host',
@@ -389,6 +391,7 @@ const DEFAULT_SETTINGS = {
   titleLanguage: 'english',
   windowDays: 7,
   alertDelivery: 'telegram',
+  alertRoute: '',
   digestHour: 9
 }
 
@@ -410,6 +413,10 @@ function normalizeSettings(raw) {
     alertDelivery: ALERT_DELIVERIES.includes(stored.alertDelivery)
       ? stored.alertDelivery
       : DEFAULT_SETTINGS.alertDelivery,
+    // The destination is remembered as `connectionId:profile`, the same key the
+    // query cache uses, so a route that disappeared falls back instead of matching
+    // some other connection's profile of the same name.
+    alertRoute: typeof stored.alertRoute === 'string' ? stored.alertRoute : DEFAULT_SETTINGS.alertRoute,
     digestHour: DIGEST_HOURS.includes(Number(stored.digestHour))
       ? Number(stored.digestHour)
       : DEFAULT_SETTINGS.digestHour
@@ -1356,6 +1363,20 @@ function holdAlert(source, job, paused, route) {
   return writeAlert(source, () => cronCall(route, { action: paused ? 'pause' : 'resume', name: job.job_id }))
 }
 
+/**
+ * The destination a new job should use: the one chosen last, or the active
+ * connection when that route is gone.
+ *
+ * Remembering this (and the channel) is the difference between picking a host and
+ * a delivery target on every single alert and picking them once — a reader whose
+ * notifications live on one box should not have to say so again every time.
+ */
+function preferredRoute(routes, remembered) {
+  const list = routes || []
+
+  return list.find((route) => routeId(route) === remembered) || list[0] || null
+}
+
 /** What a destination is called: the reader's own device, or the connection serving it. */
 function alertDestinationLabel(route, t) {
   const name = (route && route.mode === 'local') || !(route && route.label) ? t('destinationLocal') : route.label
@@ -1431,12 +1452,11 @@ function DigestPanel() {
   const tracked = useTracked()
   const settings = useValue($settings)
   const routes = destinations.data || []
-  const [chosen, setChosen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const ids = digestIds(tracked.entries)
   const armed = ((alerts.data && alerts.data.items) || []).find((item) => isDigest(item.job)) || null
-  const active = routes.find((route) => routeId(route) === chosen) || routes[0] || null
+  const active = preferredRoute(routes, settings.alertRoute)
   const remote = !!active && active.mode !== 'local'
   const deliver = remote ? settings.alertDelivery : 'local'
   const run = (work) => {
@@ -1501,7 +1521,8 @@ function DigestPanel() {
                     children: jsx(SegmentedControl, {
                       onChange: (next) => {
                         haptic('selection')
-                        setChosen(next)
+                        // Remember it: the next job opens on this destination.
+                        saveSettings({ alertRoute: next })
                       },
                       options: routes.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
                       value: routeId(active)
@@ -1558,9 +1579,8 @@ function AlertControl({ show, t }) {
   const source = useSource()
   const alerts = useAlerts()
   const destinations = useDestinations()
-  const { alertDelivery } = useValue($settings)
+  const settings = useValue($settings)
   const routes = destinations.data || []
-  const [chosen, setChosen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const episode = show.nextEpisode
@@ -1568,11 +1588,11 @@ function AlertControl({ show, t }) {
   if (!episode || !show.airingAt) return null
 
   const armed = alertFor(alerts.data, show.id, episode)
-  const active = routes.find((route) => routeId(route) === chosen) || routes[0] || null
+  const active = preferredRoute(routes, settings.alertRoute)
   // This device has exactly one sensible answer: the run shows up in the app that
   // is already open. Another host is the case where the channel matters.
   const remote = !!active && active.mode !== 'local'
-  const delivery = remote ? alertDelivery : 'local'
+  const delivery = remote ? settings.alertDelivery : 'local'
   const run = (work) => {
     setBusy(true)
     setFailure(null)
@@ -1637,7 +1657,8 @@ function AlertControl({ show, t }) {
                 jsx(SegmentedControl, {
                   onChange: (next) => {
                     haptic('selection')
-                    setChosen(next)
+                    // Remember it: the next alert opens on this destination.
+                    saveSettings({ alertRoute: next })
                   },
                   options: routes.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
                   value: routeId(active)
@@ -2091,6 +2112,7 @@ function AlertsPanel() {
 function SettingsPanel() {
   const t = usePluginI18n(ID)
   const settings = useValue($settings)
+  const destinations = useDestinations().data || []
   const [filter, setFilter] = useAiringFilter()
 
   return jsxs('div', {
@@ -2106,6 +2128,20 @@ function SettingsPanel() {
       // The digest is the other half of the same idea: a job this plugin owns,
       // in the profile's own store, delivering where the reader chose.
       jsx(DigestPanel, {}),
+      jsx(Separator, {}),
+      // The default the two panes above open on: set it once here instead of
+      // choosing a host and a channel on every alert.
+      jsx(SettingsRow, {
+        label: t('settingAlertRoute'),
+        children: jsx(SegmentedControl, {
+          onChange: (next) => {
+            haptic('selection')
+            saveSettings({ alertRoute: next })
+          },
+          options: destinations.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
+          value: routeId(preferredRoute(destinations, settings.alertRoute))
+        })
+      }),
       jsx(Separator, {}),
       jsx(SettingsRow, {
         label: t('settingTitleLanguage'),

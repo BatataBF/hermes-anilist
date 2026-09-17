@@ -27,9 +27,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   "no alerts". **Delivery target:** an alert records where its notification comes out
   (`local`/`telegram`/`discord`, the CLI's own vocabulary), offered as a named choice whenever the
   destination is not this device and remembered between alerts — the RPC default of `local` only
-  surfaces the run inside whichever app owns that store. A run that failed, or was refused by the
-  scheduler's pre-dispatch validation, says so on its row. *(The daily digest is the other half of L4
-  and is not built yet.)*
+  surfaces the run inside whichever app owns that store. **Set once, not per alert:** the destination
+  and the channel are preferences (Settings ▸ *Default destination*), so every alert after the first
+  opens on the host and channel already chosen — a reader whose notifications live on one box should
+  not have to say so again. A run that failed, or was refused by the
+  scheduler's pre-dispatch validation, says so on its row.
 
 - **Daily digest.** One message a day with what airs from the reader's list, armed from Settings: same store,
   same destination and same delivery target as an alert, but recurring — on a cron expression, which is the one

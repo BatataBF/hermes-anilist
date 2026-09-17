@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Plugin runtime artifacts
+.hermes-catalog.json
+.install-metadata.json
+plugin-data/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.log

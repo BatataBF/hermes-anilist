@@ -1,0 +1,8 @@
+{
+  "name": "hermes-anilist",
+  "label": "AniList",
+  "description": "Airing tracker and season browser for the Hermes Desktop UI.",
+  "icon": "Activity",
+  "version": "0.1.0",
+  "api": "plugin_api.py"
+}

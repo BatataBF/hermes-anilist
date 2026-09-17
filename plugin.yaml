@@ -1,0 +1,36 @@
+name: hermes-anilist
+version: 0.5.0
+description: "AniList tracker for Hermes Desktop — airing countdowns, season browsing and episode alerts in a status-bar popover."
+author: BatataBF
+license: MIT
+homepage: https://github.com/BatataBF/hermes-anilist
+kind: standalone
+requires_hermes: ">=0.21"
+# NOTE: no `manifest_version: 2` here even though the loader accepts it.
+# `hermes plugins install` pins its own ceiling at 1 (hermes_cli/plugins_cmd.py
+# `_SUPPORTED_MANIFEST_VERSION`), so a v2 declaration makes the plugin
+# UNINSTALLABLE from git while still loadable and catalog-valid — the two
+# constants drifted (loader: plugins_manifest.SUPPORTED_MANIFEST_VERSION = 2).
+# Every v2 field below is parsed with no version gate
+# (plugins_manifest._parse_manifest_v2_fields), so staying on v1 keeps the whole
+# feature set and the installer works.
+tags:
+  - desktop
+  - anime
+  - anilist
+  - tracker
+python_dependencies:
+  - "httpx>=0.28.1,<1"     # declared, never auto-installed: surfaced by install/doctor when missing
+config_schema:
+  client_id:
+    type: str
+    default: ""
+    description: "AniList OAuth client ID (public, not a secret). Empty until the app is registered."
+  airing_days:
+    type: int
+    default: 7
+    description: "How many days ahead the airing feed covers."
+  notify_mode:
+    type: str
+    default: "exact"
+    description: "Default alert mode for the episode-alert action: 'exact' (one-shot at airing time) or 'digest'."

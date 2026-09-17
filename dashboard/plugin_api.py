@@ -115,14 +115,41 @@ def _error_message(response: "httpx.Response") -> Optional[str]:
     return first.get("message")
 
 
-async def _graphql(query: str, variables: Dict[str, Any], token: Optional[str] = None) -> Dict[str, Any]:
-    payload = {"query": query, "variables": variables}
-    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+# AniList's public endpoint answered 403 to an anonymous agent string (first seen
+# when the digest prompt called it), and it asks clients to identify themselves.
+USER_AGENT = "hermes-anilist/0.7.0 (+https://github.com/BatataBF/hermes-anilist)"
+
+# One client for the process: a refresh of the airing feed stitches up to
+# MAX_AIRING_PAGES requests and every one of them used to pay its own TCP+TLS
+# setup. The gateway/serve process runs a single event loop, which is what makes
+# a module-level client safe here; `is_closed` rebuilds after a teardown.
+_client: Optional["httpx.AsyncClient"] = None
+
+
+def _headers(token: Optional[str] = None) -> Dict[str, str]:
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+    }
     if token:
         headers["Authorization"] = f"Bearer {token}"
+
+    return headers
+
+
+def _http() -> "httpx.AsyncClient":
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True)
+
+    return _client
+
+
+async def _graphql(query: str, variables: Dict[str, Any], token: Optional[str] = None) -> Dict[str, Any]:
+    payload = {"query": query, "variables": variables}
     try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
-            response = await client.post(ANILIST_ENDPOINT, json=payload, headers=headers)
+        response = await _http().post(ANILIST_ENDPOINT, json=payload, headers=_headers(token))
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"AniList is unreachable: {exc}") from exc
 

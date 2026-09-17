@@ -233,6 +233,15 @@ def test_health_reports_the_shared_cache_and_budget(api):
     assert body["endpoint"] == "https://graphql.anilist.co"
 
 
+def test_every_request_identifies_the_plugin_and_only_carries_a_token_when_given():
+    anonymous = plugin_api._headers()
+    assert anonymous["User-Agent"].startswith("hermes-anilist/")
+    assert "Authorization" not in anonymous
+
+    signed = plugin_api._headers("tok")
+    assert signed["Authorization"] == "Bearer tok"
+
+
 # ─── the airing window (fetched as several cursor pages, served as one feed) ──
 
 
@@ -1045,21 +1054,28 @@ class _FakeResponse:
 
 
 def _fake_transport(response):
-    """Stands in for httpx.AsyncClient: every POST answers with the same response."""
+    """Stands in for httpx.AsyncClient: every POST answers with the same response.
+
+    The production path pools one client per process (``plugin_api._http``), so a
+    test must both provide this shape and reset the pool — otherwise the instance
+    from the previous test is reused and answers with the wrong response.
+    """
     class _Client:
+        is_closed = False
+
         def __init__(self, *args, **kwargs):
             pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
 
         async def post(self, *args, **kwargs):
             return response
 
     return _Client
+
+
+def _pooled_transport(monkeypatch, response):
+    """Install the fake transport and drop whatever client the process pooled."""
+    monkeypatch.setattr(plugin_api.httpx, "AsyncClient", _fake_transport(response))
+    monkeypatch.setattr(plugin_api, "_client", None)
 
 
 def test_a_malformed_query_is_not_reported_as_a_rejected_token(monkeypatch):
@@ -1068,7 +1084,7 @@ def test_a_malformed_query_is_not_reported_as_a_rejected_token(monkeypatch):
         "errors": [{"message": 'Cannot query field "episodes" on type "UserStatistics".', "status": 400}],
         "data": None,
     }
-    monkeypatch.setattr(plugin_api.httpx, "AsyncClient", _fake_transport(_FakeResponse(400, payload)))
+    _pooled_transport(monkeypatch, _FakeResponse(400, payload))
 
     with pytest.raises(plugin_api.HTTPException) as failure:
         asyncio.run(plugin_api._graphql("query { bad }", {}, token="tok"))
@@ -1078,7 +1094,7 @@ def test_a_malformed_query_is_not_reported_as_a_rejected_token(monkeypatch):
 
 
 def test_a_401_with_a_token_still_names_the_token(monkeypatch):
-    monkeypatch.setattr(plugin_api.httpx, "AsyncClient", _fake_transport(_FakeResponse(401, {"errors": []})))
+    _pooled_transport(monkeypatch, _FakeResponse(401, {"errors": []}))
 
     with pytest.raises(plugin_api.HTTPException) as failure:
         asyncio.run(plugin_api._graphql("query { Viewer { id } }", {}, token="stale"))

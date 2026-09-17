@@ -57,6 +57,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - **The answer cache is bounded.** Every key is a question (a query at a page, a window at a cursor)
   and a long-lived gateway mints hundreds of them: the cache now holds at most 256 entries, evicting
   expired ones first and then whatever is closest to expiring.
+- **One pooled HTTP client, and every request identifies the plugin.** The airing feed stitches up to
+  `MAX_AIRING_PAGES` pages per refresh and each request used to open its own `httpx.AsyncClient`; the
+  process keeps a single pooled client now (rebuilt when closed, five fewer handshakes on a dense
+  window) and sends `User-Agent: hermes-anilist/…` — AniList answered 403 to an anonymous agent
+  string when the digest ran, and it asks clients to identify themselves.
 
 ### Fixed
 

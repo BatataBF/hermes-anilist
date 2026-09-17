@@ -13,7 +13,7 @@ A Hermes plugin with three parts in one installable folder:
 
 | Part | Where | What it does |
 |---|---|---|
-| Desktop half | `desktop/plugin.js` | A status-bar chip that unfolds a popover, a workspace tab (Upcoming · Seasons · Settings) and command-palette entries |
+| Desktop half | `desktop/plugin.js` | A status-bar chip that unfolds a popover (the airing feed and its filters) and a workspace tab (Airing · Catalog · Settings), plus command-palette entries |
 | Backend half | `dashboard/plugin_api.py` | The only thing that talks to AniList — caching and the rate-limit budget live here |
 | Agent half | `plugin.yaml` + `__init__.py` | Manifest, settings schema, and the bridge that hands the routes their state |
 

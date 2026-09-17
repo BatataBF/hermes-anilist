@@ -80,7 +80,7 @@ const STRINGS = {
     unreachable: 'AniList is unreachable',
     localDevice: 'This device',
     chipLabel: 'AniList — upcoming episodes',
-    seasons: 'Seasons',
+    seasons: 'Catalog',
     seasonName: (season) =>
       ({ WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall' })[season] || season,
     searchPlaceholder: 'Search a title…',
@@ -111,6 +111,10 @@ const STRINGS = {
     monthName: (index) =>
       ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index] || '',
     tabUpcoming: 'Upcoming',
+    openUpcoming: 'See everything',
+    openBrowse: 'Search a show',
+    sectionAccount: 'Account',
+    sectionPreferences: 'Preferences',
     settings: 'Settings',
     settingTitleLanguage: 'Title language',
     titleEnglish: 'English',
@@ -210,7 +214,7 @@ const STRINGS = {
     unreachable: 'AniList no responde',
     localDevice: 'Este equipo',
     chipLabel: 'AniList — próximos episodios',
-    seasons: 'Temporadas',
+    seasons: 'Catálogo',
     seasonName: (season) =>
       ({ WINTER: 'Invierno', SPRING: 'Primavera', SUMMER: 'Verano', FALL: 'Otoño' })[season] || season,
     searchPlaceholder: 'Buscá un título…',
@@ -241,6 +245,10 @@ const STRINGS = {
     monthName: (index) =>
       ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][index] || '',
     tabUpcoming: 'Próximos',
+    openUpcoming: 'Ver todo',
+    openBrowse: 'Buscar una serie',
+    sectionAccount: 'Cuenta',
+    sectionPreferences: 'Preferencias',
     settings: 'Ajustes',
     settingTitleLanguage: 'Idioma de títulos',
     titleEnglish: 'Inglés',
@@ -1093,6 +1101,13 @@ function AniListWorkspace() {
 /** Bound to the workspace tab this plugin opened, so a second open replaces it. */
 let workspaceClose = null
 
+/** Open the workspace, or say why not — the palette entries' own fallback. */
+function openWorkspaceOrSay(view) {
+  if (openAniListWorkspace(view)) return
+
+  host.notify({ kind: 'info', message: 'AniList: ' + STRINGS.en.chipFallback })
+}
+
 /** Open the workspace tab. False when this desktop predates the main-area door. */
 function openAniListWorkspace(view = 'browse') {
   if (typeof host.openWorkspace !== 'function') return false
@@ -1479,10 +1494,7 @@ function DigestPanel() {
   return jsxs('div', {
     className: 'flex flex-col gap-2',
     children: [
-      jsx('div', {
-        className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
-        children: t('digestTitle')
-      }),
+      jsx(SectionTitle, { children: t('digestTitle') }),
       jsx('div', {
         className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
         children: t('digestHint', ids.length)
@@ -1555,7 +1567,7 @@ function DigestPanel() {
                 : null,
               jsx(Button, {
                 type: 'button',
-                variant: 'ghost',
+                variant: 'default',
                 size: 'sm',
                 disabled: busy || !active || ids.length === 0,
                 onClick: () => {
@@ -1637,7 +1649,8 @@ function AlertControl({ show, t }) {
               ]
             : jsx(Button, {
                 type: 'button',
-                variant: 'ghost',
+                // The primary action of a show's page deserves the primary look.
+                variant: 'default',
                 size: 'sm',
                 disabled: busy || !active,
                 onClick: () => {
@@ -2071,10 +2084,7 @@ function AlertRow({ job, route, t }) {
 function AlertsPanel() {
   const t = usePluginI18n(ID)
   const alerts = useAlerts()
-  const label = jsx('div', {
-    className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
-    children: t('alerts')
-  })
+  const label = jsx(SectionTitle, { children: t('alerts') })
   const items = (alerts.data && alerts.data.items) || []
   const failed = (alerts.data && alerts.data.failed) || []
 
@@ -2130,6 +2140,7 @@ function SettingsPanel() {
     className: 'flex flex-col gap-3',
     children: [
       // The account first: it is the one setting that has a step outside Hermes.
+      jsx(SectionTitle, { children: t('sectionAccount') }),
       jsx(AccountPanel, {}),
       jsx(Separator, {}),
       // Alerts are cron jobs in the profile's own store — same class of thing:
@@ -2154,6 +2165,7 @@ function SettingsPanel() {
         })
       }),
       jsx(Separator, {}),
+      jsx(SectionTitle, { children: t('sectionPreferences') }),
       jsx(SettingsRow, {
         label: t('settingTitleLanguage'),
         children: jsx(SegmentedControl, {
@@ -2217,7 +2229,15 @@ function SettingsPanel() {
   })
 }
 
-/** The switcher both surfaces share: upcoming · seasons · settings. */
+/** A group heading inside a panel — the same quiet caps the alert panes use. */
+function SectionTitle({ children }) {
+  return jsx('div', {
+    className: 'text-[0.6875rem] font-medium uppercase tracking-wide text-(--ui-text-quaternary)',
+    children
+  })
+}
+
+/** The switcher the workspace uses: airing · catalog · settings. */
 function ViewTabs({ onChange, t, value }) {
   return jsx(SegmentedControl, {
     onChange: (next) => {
@@ -2317,18 +2337,16 @@ function UpcomingPanel({ compact = true }) {
             className: 'flex items-center gap-1',
             children: [
               jsx('div', { className: 'text-xs font-medium text-(--ui-text-secondary)', children: t('upcoming') }),
-              jsx(Tip, {
-                label: t('refresh'),
-                children: jsx(Button, {
-                  type: 'button',
-                  variant: 'ghost',
-                  size: 'sm',
-                  onClick: () => {
-                    haptic('tap')
-                    void airing.refetch()
-                  },
-                  children: '↻'
-                })
+              // A named action, not a bare ↻: the label says what it refreshes.
+              jsx(Button, {
+                type: 'button',
+                variant: 'ghost',
+                size: 'xs',
+                onClick: () => {
+                  haptic('tap')
+                  void airing.refetch()
+                },
+                children: t('refresh')
               })
             ]
           }),
@@ -2957,22 +2975,49 @@ function AiringRow({ entry, item, onToggle, t, watched }) {
 }
 
 /**
- * The popover body: who we read from, then the shared view switcher and the
- * panel for the picked view — the same three panels the workspace tab renders.
+ * The popover is the airing feed and the filters that belong to it — the same
+ * ones it always had — and nothing else. The catalog and the settings moved to the
+ * workspace, where there is room to read them instead of a tab strip squeezed into
+ * a status-bar menu.
  */
-function PopoverBody({ setView, view }) {
+function PopoverBody({ onClose }) {
   const t = usePluginI18n(ID)
 
   return jsxs('div', {
     className: 'flex flex-col gap-2',
     children: [
       jsx(OriginLine, {}),
-      jsx(ViewTabs, { t, value: view, onChange: setView }),
-      view === 'browse'
-        ? jsx(BrowsePanel, { compact: true })
-        : view === 'settings'
-          ? jsx(SettingsPanel, {})
-          : jsx(UpcomingPanel, { compact: true })
+      jsx(UpcomingPanel, { compact: true }),
+      jsx(Separator, {}),
+      // Two named doors out of here, so the surface that has the room is one
+      // click away instead of hidden behind an icon.
+      jsxs('div', {
+        className: 'flex items-center gap-2',
+        children: [
+          jsx(Button, {
+            type: 'button',
+            variant: 'outline',
+            size: 'sm',
+            onClick: () => {
+              haptic('tap')
+              onClose()
+              openWorkspaceOrSay('upcoming')
+            },
+            children: t('openUpcoming')
+          }),
+          jsx(Button, {
+            type: 'button',
+            variant: 'ghost',
+            size: 'sm',
+            onClick: () => {
+              haptic('tap')
+              onClose()
+              openWorkspaceOrSay('browse')
+            },
+            children: t('openBrowse')
+          })
+        ]
+      })
     ]
   })
 }
@@ -2980,17 +3025,23 @@ function PopoverBody({ setView, view }) {
 function NextChip() {
   const t = usePluginI18n(ID)
   const airing = useAiring()
-  const [view, setView] = useState('upcoming')
+  const { titleLanguage } = useValue($settings)
+  // Controlled so the footer's buttons can close this menu on their way out.
+  const [open, setOpen] = useState(false)
   const items = (airing.data && airing.data.items) || []
   const next = items[0]
+  // A bare countdown says how long, not what for.
+  const nextTitle = next ? titleOf(next, titleLanguage) : ''
 
   return jsx(Popover, {
+    open,
+    onOpenChange: (nextOpen) => setOpen(nextOpen),
     children: [
       jsx(PopoverTrigger, {
         asChild: true,
         children: jsx('button', {
           type: 'button',
-          title: t('chipLabel'),
+          title: next ? `${nextTitle} — ${countdown(next.airingAt, t)}` : t('chipLabel'),
           className: cn(
             'inline-flex h-full items-center gap-1 px-1.5 text-[0.6875rem] transition-colors',
             'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
@@ -2998,6 +3049,9 @@ function NextChip() {
           onClick: () => haptic('tap'),
           children: [
             jsx('span', { children: 'anilist' }),
+            // Named, not just counted down to. Truncation is inline because the
+            // compiled Tailwind carries no arbitrary max-width.
+            next ? jsx('span', { className: 'truncate', style: { maxWidth: '9rem' }, children: nextTitle }) : null,
             next ? jsx('span', { children: countdown(next.airingAt, t) }) : null
           ]
         })
@@ -3021,7 +3075,7 @@ function NextChip() {
           event.preventDefault()
         },
         onPointerDownOutside: () => console.log('[anilist] popover dismiss: pointerdown-outside'),
-        children: jsx(PopoverBody, { setView, view })
+        children: jsx(PopoverBody, { onClose: () => setOpen(false) })
       }),
       // One dialog for the whole plugin, mounted beside the popover rather than
       // inside it: the workspace tab asks through it too, and a confirm dialog

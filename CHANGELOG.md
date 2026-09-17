@@ -42,6 +42,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   real 72-id list — the message arrives as one line per show, no preamble, no notes, no questions.
   *(L4 is complete with this.)*
 
+### Changed
+
+- **The status-bar popover is the feed again.** It keeps the filters it always had (today · the window ·
+  my list) and drops the view switcher: the catalog and the settings live in the workspace, where there is
+  room to read them. Two named buttons at the bottom — *See everything* and *Search a show* — open it, and
+  the menu closes on the way out.
+- **Settings is one organized place**: Account, Alerts, Daily digest, Default destination, Preferences —
+  each under a labeled group, with the digest beside the alerts it belongs to and never in the popover.
+- **Named actions instead of glyphs.** Refresh says *Refresh*; arming an alert or the digest is the primary
+  button rather than another ghost one; the chip names the show it is counting down to (its tooltip says
+  the whole thing).
+
 ## [0.6.0] - 2026-09-17
 
 ### Added

@@ -45,12 +45,12 @@ const grabConst = (name) => {
   return lines.slice(start, end + 1).join('\n')
 }
 
-const CONSTS = ['STRINGS', 'DEFAULT_SETTINGS', 'ALERT_PREFIX', 'ALERT_RE', 'DIGEST_PREFIX', 'DIGEST_STATUSES', 'DELIVERY_NAMES', 'SYNOPSIS_CLAMP']
+const CONSTS = ['STRINGS', 'DEFAULT_SETTINGS', 'ALERT_PREFIX', 'ALERT_RE', 'DIGEST_PREFIX', 'DIGEST_STATUSES', 'DELIVERY_NAMES', 'SYNOPSIS_CLAMP', 'CHIP_COMING_HOURS']
 const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
   'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
-  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon', 'chipNext',
+  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon', 'comingAiring',
   'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring'
 ]
 
@@ -332,15 +332,26 @@ test('the chip wears a broadcast mark once its episode is within the hour', () =
   assert.equal(helpers.chipIcon(undefined, now), 'clock')
 })
 
-test('the chip is about the reader\'s own list, not the whole schedule', () => {
-  const items = [{ id: 1, airingAt: 100 }, { id: 2, airingAt: 200 }, { id: 3, airingAt: 300 }]
+test('the chip counts what is coming: only mine, only inside the horizon, in air order', () => {
+  const now = wall(2026, 8, 18, 10, 0)
+  const items = [
+    { id: 1, airingAt: now + 600 }, // not tracked
+    { id: 2, airingAt: now + 3600 }, // mine, next
+    { id: 3, airingAt: now + 7200 }, // mine, right after it
+    { id: 4, airingAt: now + 30 * 3600 }, // mine, tomorrow
+    { id: 5, airingAt: now + 4000 } // not tracked
+  ]
+  const ids = new Set(['2', '3', '4'])
+  const coming = helpers.comingAiring(items, ids, 24, now)
 
-  assert.equal(helpers.chipNext(items, new Set(['2', '3'])).id, 2, 'the next one among mine')
-  assert.equal(helpers.chipNext(items, new Set(['3'])).id, 3, 'the earliest of mine, not the first overall')
-  assert.equal(helpers.chipNext(items, new Set(['9'])), null, 'nothing of mine in the window')
-  assert.equal(helpers.chipNext(items, new Set()), null, 'nothing tracked, nothing claimed')
-  assert.equal(helpers.chipNext([], new Set(['1'])), null)
-  assert.equal(helpers.chipNext(null, new Set(['1'])), null)
+  assert.deepEqual(coming.map((item) => item.id), [2, 3], 'mine, in order, inside the horizon')
+  assert.equal(coming[0].id, 2, 'and the chip names the first of them')
+  assert.equal(helpers.comingAiring(items, ids, 48, now).length, 3, 'a wider horizon reaches tomorrow')
+  assert.equal(helpers.comingAiring(items, new Set()).length, 0, 'nothing tracked, nothing claimed')
+  assert.equal(helpers.comingAiring(items, new Set(['9']), 24, now).length, 0)
+  assert.equal(helpers.comingAiring(null, ids, 24, now).length, 0)
+  // The tooltip promises this number; keeping them one value is what stops drift.
+  assert.equal(helpers.CHIP_COMING_HOURS, 24)
 })
 
 if (failed) {

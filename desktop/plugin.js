@@ -90,6 +90,8 @@ const STRINGS = {
     localDevice: 'This device',
     chipLabel: 'AniList — upcoming episodes',
     chipScope: 'from your list',
+    chipMore: (count) => `+${count}`,
+    chipMoreHint: (count, hours) => `and ${count} more in the next ${hours}h`,
     chipNothingAiring: 'nothing of yours airs soon',
     chipNothingTracked: 'no shows tracked',
     chipNothingAiringHint: (days) => `Nothing in your list airs in the next ${days} days.`,
@@ -261,6 +263,8 @@ const STRINGS = {
     localDevice: 'Este equipo',
     chipLabel: 'AniList — próximos episodios',
     chipScope: 'de tu lista',
+    chipMore: (count) => `+${count}`,
+    chipMoreHint: (count, hours) => `y ${count} más en las próximas ${hours} h`,
     chipNothingAiring: 'nada tuyo emite pronto',
     chipNothingTracked: 'sin series seguidas',
     chipNothingAiringHint: (days) => `Nada de tu lista emite en los próximos ${days} días.`,
@@ -431,17 +435,24 @@ function chipIcon(airingAt, now = Date.now() / 1000) {
   return airingAt && airingAt - now <= 3600 ? 'broadcast' : 'clock'
 }
 
+/** How far ahead "coming up" reaches: the chip is a glance at tonight, not a week. */
+const CHIP_COMING_HOURS = 24
+
 /**
- * The one show the chip is about: the next episode among the shows this reader
- * tracks. The whole schedule is the popover's business — a chip that silently
- * changes whose show it means is a chip nobody can trust.
+ * Your episodes airing inside the chip's horizon, in air order.
  *
- * Signed in, that list is the AniList account's; signed out, it is this device's
- * own list, which tracks the same way. One rule either way, so the chip does not
- * mean something different depending on a login.
+ * Only yours: the whole schedule is the popover's business, and a chip that
+ * silently changes whose show it means is a chip nobody can trust. Signed in that
+ * list is the AniList account's; signed out it is this device's own list, which
+ * tracks the same way — one rule either way, so a login does not change what the
+ * chip means.
  */
-function chipNext(items, ids) {
-  return (items || []).filter((item) => ids && ids.has(String(item.id)))[0] || null
+function comingAiring(items, ids, hours = CHIP_COMING_HOURS, now = Date.now() / 1000) {
+  const until = now + hours * 3600
+
+  return (items || []).filter(
+    (item) => ids && ids.has(String(item.id)) && (item.airingAt || 0) <= until
+  )
 }
 
 /** 404 from ctx.rest means the Python half is not mounted on this agent. */
@@ -3674,7 +3685,12 @@ function NextChip() {
   // The chip answers one question: what airs next among the shows this reader
   // tracks. `useAiring` already refetches every minute, so it rolls over to the
   // following episode on its own as each one goes out.
-  const next = chipNext(items, tracked.ids)
+  const coming = comingAiring(items, tracked.ids)
+  const next = coming[0] || null
+  // How many more land inside the same horizon — the chip says "there is more"
+  // rather than cycling through them, because a status bar that moves on its own
+  // is one you cannot read.
+  const more = Math.max(0, coming.length - 1)
   // A bare countdown says how long, not what for.
   const nextTitle = next ? titleOf(next, titleLanguage) : ''
   // Within the hour the chip stops being a postcard and starts being a notice.
@@ -3685,6 +3701,20 @@ function NextChip() {
   const empty = !next && !settling
   const emptyLabel = tracked.ids.size ? t('chipNothingAiring') : t('chipNothingTracked')
   const emptyHint = tracked.ids.size ? t('chipNothingAiringHint', windowDays) : t('chipNothingTrackedHint')
+  // The hover text is where the chip can be complete: the show, when, whose list,
+  // and how many more of yours are inside the same horizon.
+  const chipTitle = next
+    ? [
+        nextTitle,
+        countdown(next.airingAt, t),
+        t('chipScope'),
+        more ? t('chipMoreHint', more, CHIP_COMING_HOURS) : ''
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : empty
+      ? emptyHint
+      : t('chipLabel')
 
   return jsx(Popover, {
     open,
@@ -3696,11 +3726,7 @@ function NextChip() {
           type: 'button',
           // The hover text carries the scope too: "whose show is this" is the one
           // thing about the chip that is invisible at a glance.
-          title: next
-            ? `${nextTitle} — ${countdown(next.airingAt, t)} · ${t('chipScope')}`
-            : empty
-              ? emptyHint
-              : t('chipLabel'),
+          title: chipTitle,
           className: cn(
             'inline-flex h-full items-center gap-1.5 px-1.5 text-[0.6875rem] transition-colors',
             'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
@@ -3728,7 +3754,11 @@ function NextChip() {
                 })
               : empty
                 ? jsx('span', { className: 'truncate opacity-60', children: emptyLabel })
-                : null
+                : null,
+            // "One of two" is worth saying; cycling between them is not.
+            more
+              ? jsx('span', { className: 'shrink-0 opacity-60', children: t('chipMore', more) })
+              : null
           ]
         })
       }),

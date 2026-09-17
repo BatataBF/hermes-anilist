@@ -1706,7 +1706,7 @@ function AlertControl({ show, t }) {
                   id,
                   label: id === 'local' ? t('deliverLocal') : DELIVERY_NAMES[id] || id
                 })),
-                value: alertDelivery
+                value: settings.alertDelivery
               })
             ]
           })

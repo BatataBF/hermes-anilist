@@ -54,6 +54,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   button rather than another ghost one; the chip names the show it is counting down to (its tooltip says
   the whole thing).
 
+### Fixed
+
+- **The delivery picker crashed the workspace.** Its value read a bare `alertDelivery` that the
+  preference refactor had already moved onto `settings` — the render threw
+  `ReferenceError: alertDelivery is not defined`, the app's error boundary caught it, and the pane
+  said *failed to render*. This class (an identifier left behind by a rename) passes `node --check`
+  because the file still parses, so `tools/lint_plugin_js.py` now checks for it and the README says
+  to run it after touching the desktop half.
+
 ## [0.6.0] - 2026-09-17
 
 ### Added

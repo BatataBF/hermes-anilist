@@ -152,6 +152,8 @@ const STRINGS = {
     alertDestination: 'Run on',
     destinationLocal: 'This device',
     alertsHostUnreachable: (host) => `Could not reach ${host}.`,
+    alertRunFailed: 'last run failed',
+    alertBlocked: 'blocked by host config',
     // What the cron job runs: a prompt the agent acts on at airing time.
     alertPrompt: (title, episode, url) =>
       `Tell me right away: ${title} — episode ${episode} has just aired. Details: ${url}`,
@@ -263,6 +265,8 @@ const STRINGS = {
     alertDestination: 'Dónde',
     destinationLocal: 'Este equipo',
     alertsHostUnreachable: (host) => `No pude consultar ${host}.`,
+    alertRunFailed: 'la última corrida falló',
+    alertBlocked: 'bloqueado por la config del host',
     // Lo que corre el cronjob: un prompt que el agente ejecuta al airear.
     alertPrompt: (title, episode, url) =>
       `Avisame al toque: ${title} — el episodio ${episode} acaba de salir al aire. Ficha: ${url}`,
@@ -1225,6 +1229,28 @@ function alertTitle(job) {
   return String((job && job.name) || '').replace(/^\[anilist[^\]]*\]\s*/i, '')
 }
 
+/**
+ * The scheduler's own words for a run that did not happen, trimmed for a row.
+ *
+ * `blocked_config` is not a failed run: the pre-dispatch validation refused it and
+ * **no LLM call was made**, which is a host configuration problem — the provider
+ * the job resolves to is not usable there.
+ */
+function alertFailure(job) {
+  const reason = String((job && (job.last_error || job.last_fire_error || job.last_delivery_error)) || '').trim()
+
+  return reason.length > 220 ? `${reason.slice(0, 217)}…` : reason
+}
+
+function alertStateLabel(job, t) {
+  const status = String((job && job.last_status) || '')
+
+  if (status === 'blocked_config') return t('alertBlocked')
+  if (status === 'error') return t('alertRunFailed')
+
+  return ''
+}
+
 /** "hoy 19:30" / "17 oct 19:30" — when a job will fire, in the reader's calendar. */
 function runAtLabel(iso, t) {
   const date = new Date(iso || 0)
@@ -1670,6 +1696,7 @@ function AlertRow({ job, route, t }) {
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const paused = job.state === 'paused' || job.enabled === false
+  const broken = alertStateLabel(job, t) !== ''
   const run = (work) => {
     setBusy(true)
     setFailure(null)
@@ -1697,7 +1724,17 @@ function AlertRow({ job, route, t }) {
               // Which host holds it decides where it delivers, so it is part of
               // the row and not a detail buried elsewhere.
               jsx('span', { className: 'truncate', children: alertDestinationLabel(route, t) }),
-              paused ? jsx(Badge, { variant: 'muted', children: t('alertPaused') }) : null
+              paused ? jsx(Badge, { variant: 'muted', children: t('alertPaused') }) : null,
+              // A job that did not run says so here: the pane is where the alert
+              // was armed, so it is where the reason belongs, not only in the
+              // app's job inspector.
+              broken
+                ? jsx('span', {
+                    className: 'shrink-0 text-destructive',
+                    title: alertFailure(job),
+                    children: alertStateLabel(job, t)
+                  })
+                : null
             ]
           })
         ]

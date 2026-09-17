@@ -89,6 +89,7 @@ const STRINGS = {
     unreachable: 'AniList is unreachable',
     localDevice: 'This device',
     chipLabel: 'AniList — upcoming episodes',
+    chipScope: 'from your list',
     chipNothingAiring: 'nothing of yours airs soon',
     chipNothingTracked: 'no shows tracked',
     chipNothingAiringHint: (days) => `Nothing in your list airs in the next ${days} days.`,
@@ -259,6 +260,7 @@ const STRINGS = {
     unreachable: 'AniList no responde',
     localDevice: 'Este equipo',
     chipLabel: 'AniList — próximos episodios',
+    chipScope: 'de tu lista',
     chipNothingAiring: 'nada tuyo emite pronto',
     chipNothingTracked: 'sin series seguidas',
     chipNothingAiringHint: (days) => `Nada de tu lista emite en los próximos ${days} días.`,
@@ -3692,7 +3694,13 @@ function NextChip() {
         asChild: true,
         children: jsx('button', {
           type: 'button',
-          title: next ? `${nextTitle} — ${countdown(next.airingAt, t)}` : empty ? emptyHint : t('chipLabel'),
+          // The hover text carries the scope too: "whose show is this" is the one
+          // thing about the chip that is invisible at a glance.
+          title: next
+            ? `${nextTitle} — ${countdown(next.airingAt, t)} · ${t('chipScope')}`
+            : empty
+              ? emptyHint
+              : t('chipLabel'),
           className: cn(
             'inline-flex h-full items-center gap-1.5 px-1.5 text-[0.6875rem] transition-colors',
             'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'

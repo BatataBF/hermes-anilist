@@ -106,6 +106,26 @@ def test_cache_expiry_and_stale_fallback():
     assert plugin_api._stale("k") == {"v": 1}          # still there for the rate-floor path
 
 
+def test_the_cache_stays_bounded_and_forgets_the_oldest_first():
+    plugin_api._cache.clear()
+    for index in range(plugin_api.CACHE_MAX_ENTRIES + 40):
+        plugin_api._store(f"answer:{index}", index, 300.0)
+
+    assert len(plugin_api._cache) == plugin_api.CACHE_MAX_ENTRIES
+    assert "answer:295" in plugin_api._cache        # the newest answer survived
+    assert "answer:0" not in plugin_api._cache      # the oldest made room
+
+
+def test_a_brand_new_answer_survives_its_own_insertion():
+    plugin_api._cache.clear()
+    for index in range(plugin_api.CACHE_MAX_ENTRIES):
+        plugin_api._store(f"answer:{index}", index, 300.0)
+
+    plugin_api._store("answer:new", 1, 300.0)
+
+    assert "answer:new" in plugin_api._cache
+
+
 def test_rate_floor_trips_below_five_remaining():
     plugin_api._rate["remaining"] = None
     assert plugin_api._rate_exhausted() is False

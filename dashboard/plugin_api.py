@@ -70,8 +70,30 @@ def _stale(key: str) -> Optional[Any]:
     return hit[1] if hit else None
 
 
+# How many distinct answers one process may hold. Every key is "one question" (a
+# query at a page, a window at a cursor) and a long-lived gateway mints hundreds
+# of them over a season, so the cache has to forget on purpose.
+CACHE_MAX_ENTRIES = 256
+
+
+def _evict(keep: str) -> None:
+    """Make room: expired entries first, then the ones closest to expiring."""
+    now = time.time()
+    for key in [k for k, (expires_at, _) in _cache.items() if expires_at <= now and k != keep]:
+        _cache.pop(key, None)
+
+    while len(_cache) > CACHE_MAX_ENTRIES:
+        oldest = min((key for key in _cache if key != keep), key=lambda key: _cache[key][0], default=None)
+        if oldest is None:
+            break
+        _cache.pop(oldest, None)
+
+
 def _store(key: str, value: Any, ttl: float) -> Any:
     _cache[key] = (time.time() + ttl, value)
+    if len(_cache) > CACHE_MAX_ENTRIES:
+        _evict(key)
+
     return value
 
 

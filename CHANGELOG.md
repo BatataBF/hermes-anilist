@@ -52,7 +52,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   each under a labeled group, with the digest beside the alerts it belongs to and never in the popover.
 - **Named actions instead of glyphs.** Refresh says *Refresh*; arming an alert or the digest is the primary
   button rather than another ghost one; the chip names the show it is counting down to (its tooltip says
-  the whole thing).
+  the whole thing.
+
+- **The answer cache is bounded.** Every key is a question (a query at a page, a window at a cursor)
+  and a long-lived gateway mints hundreds of them: the cache now holds at most 256 entries, evicting
+  expired ones first and then whatever is closest to expiring.
 
 ### Fixed
 

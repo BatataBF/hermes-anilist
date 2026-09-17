@@ -16,7 +16,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   the name is namespaced (`[anilist:<media id>:e<episode>] <title> — EP <n>`) so the pane can find
   its own again. Settings ▸ *Alerts* lists them with pause/resume and remove, and the show's page says
   whether its next episode is armed. It works signed out: an air date is public, and a cron job does
-  not care who is logged in. *(The daily digest is the other half of L4 and is not built yet.)*
+  not care who is logged in.
+- **Destination.** An alert can be scheduled on any registered connection, not just this device: the
+  call is routed with the app's own `host.profileRoutes()` descriptor through `host.requestProfile` —
+  the same multi-connection door Bot Mode uses — so the job lands in *that* machine's cron store. This
+  is the difference between an alert that only surfaces inside the app and one that reaches a phone: a
+  box running its own gateway with a messaging channel configured is where the job has to live. The
+  Alerts list asks every destination it can reach, names each row's host, and routes pause/resume and
+  remove back to the gateway that owns the job — a host it cannot reach is reported as such, never as
+  "no alerts". *(The daily digest is the other half of L4 and is not built yet.)*
 
 ## [0.6.0] - 2026-09-17
 

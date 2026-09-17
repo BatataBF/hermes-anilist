@@ -35,10 +35,12 @@ The renderer never holds a credential: it only ever sees public data and a `conf
   star a show to add it, set its status (including *rewatching*), step the progress, or take it off
   the list — that last one behind a confirmation, because it deletes the entry on AniList. Signed out,
   everything above still works against the local watchlist.
-- **Episode alerts**: ask to be told about the next episode and the plugin creates a cron job in your
-  profile that fires when it airs — it survives closing Hermes, it shows up in `hermes cron list`, and
-  Settings ▸ *Alerts* is where you pause, resume or cancel it. Signed out works too: the air date is
-  public.
+- **Episode alerts**: ask to be told about the next episode and the plugin creates a cron job that
+  fires when it airs — it survives closing Hermes, it shows up in `hermes cron list`, and Settings ▸
+  *Alerts* is where you pause, resume or cancel it. Signed out works too: the air date is public.
+  **Choose the host it runs on**: an alert scheduled on a connection that runs its own gateway (with
+  Telegram configured, say) is the one that reaches your phone; "this device" only surfaces the run
+  inside the app.
 - **A per-show detail**: cover, format, status, length, duration, score, studio, genres, the next
   episode's countdown, the full description, the episode list, and the tracking controls (status,
   progress ±, remove).

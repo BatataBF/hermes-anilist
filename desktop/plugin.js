@@ -149,6 +149,9 @@ const STRINGS = {
     alertEmpty: 'No alerts yet. Open a show and ask to be told when its next episode airs.',
     alertFailed: 'The alert could not be saved.',
     alertsUnavailable: 'Alerts need the Hermes gateway.',
+    alertDestination: 'Run on',
+    destinationLocal: 'This device',
+    alertsHostUnreachable: (host) => `Could not reach ${host}.`,
     // What the cron job runs: a prompt the agent acts on at airing time.
     alertPrompt: (title, episode, url) =>
       `Tell me right away: ${title} — episode ${episode} has just aired. Details: ${url}`,
@@ -257,6 +260,9 @@ const STRINGS = {
     alertEmpty: 'Todavía no hay alertas. Abrí una serie y pedí que te avise cuando salga el próximo episodio.',
     alertFailed: 'No se pudo guardar la alerta.',
     alertsUnavailable: 'Las alertas necesitan el gateway de Hermes.',
+    alertDestination: 'Dónde',
+    destinationLocal: 'Este equipo',
+    alertsHostUnreachable: (host) => `No pude consultar ${host}.`,
     // Lo que corre el cronjob: un prompt que el agente ejecuta al airear.
     alertPrompt: (title, episode, url) =>
       `Avisame al toque: ${title} — el episodio ${episode} acaba de salir al aire. Ficha: ${url}`,
@@ -1102,29 +1108,111 @@ function alertsKey(source) {
   return [SOURCE, source.id, source.profile, 'alerts']
 }
 
-/** What this plugin created, read back from the gateway. */
+/** A destination's identity, for keys and for the picker's value. */
+function routeId(route) {
+  return `${(route && route.connectionId) || 'local'}:${(route && route.profile) || 'default'}`
+}
+
+/**
+ * Where an alert can be scheduled: this device, plus every registered connection
+ * that serves a profile.
+ *
+ * The destination is the whole point of the choice. A job runs where its cron
+ * store and its delivery channel live — a box running its own gateway (with
+ * Telegram configured) is the one whose alert reaches a phone, while "this
+ * device" only surfaces the run inside the app. `host.profileRoutes` is the app's
+ * own inventory of (connection, profile) pairs, so nothing here is guessed.
+ */
+function useDestinations() {
+  return useQuery({
+    queryKey: [SOURCE, 'destinations'],
+    queryFn: async () => {
+      const rows = typeof host.connections === 'function' ? await host.connections() : []
+      const labels = new Map((rows || []).map((row) => [String((row && row.id) || ''), (row && row.label) || '']))
+      const routes = typeof host.profileRoutes === 'function' ? await host.profileRoutes() : []
+
+      return (routes || []).map((route) => ({
+        ...route,
+        // A local route is the reader's own machine; a remote one is named after
+        // the connection that serves it.
+        label: route.mode === 'local' ? '' : `${labels.get(String(route.connectionId)) || route.connectionId}`
+      }))
+    },
+    staleTime: 600000,
+    refetchInterval: false,
+    retry: 1
+  })
+}
+
+/**
+ * One cron call, wherever the job lives.
+ *
+ * The descriptor from `host.profileRoutes()` is what routes it, for a local route
+ * as much as a remote one — the SDK's own guidance is that registry-aware plugins
+ * pass the descriptor so two sources exposing the same profile name cannot
+ * collide — and it goes through that source without foregrounding it, so asking a
+ * sleeping SSH box does not steal the active chat. `profile` rides along as the
+ * backend's own name for that route, so the store written is the right one.
+ */
+function cronCall(route, params) {
+  const scoped = { ...params, profile: ((route && route.targetProfile) || alertScope().profile) }
+
+  if (route && typeof host.requestProfile === 'function') {
+    return host.requestProfile(route, 'cron.manage', scoped)
+  }
+
+  if (route && route.mode === 'remote') {
+    throw new Error('This Desktop build cannot reach another connection. Update Hermes Desktop.')
+  }
+
+  return host.request('cron.manage', scoped)
+}
+
+/**
+ * What this plugin created, read back from every destination it can reach.
+ *
+ * One unreachable host must not empty the list, and must not read as "you have
+ * no alerts" either: the failures come back with the answer so the pane can say
+ * which host it could not ask.
+ */
 function useAlerts() {
   const source = useSource()
+  const destinations = useDestinations()
+  const routes = destinations.data || []
 
   return useQuery({
     queryKey: alertsKey(source),
     queryFn: async () => {
-      // Paused jobs come back too: one the reader paused here must not vanish
-      // from the pane that is the only place to resume it.
-      const data = await host.request('cron.manage', { action: 'list', include_disabled: true, ...alertScope() })
+      const answers = await Promise.all(
+        routes.map(async (route) => {
+          try {
+            const data = await cronCall(route, { action: 'list', include_disabled: true })
 
-      return (data && Array.isArray(data.jobs) ? data.jobs : []).filter(isAlert)
+            return { failed: null, items: (data && Array.isArray(data.jobs) ? data.jobs : []).filter(isAlert).map((job) => ({ job, route })) }
+          } catch (error) {
+            console.warn('[anilist] alerts: could not ask', routeId(route), error)
+
+            return { failed: route, items: [] }
+          }
+        })
+      )
+
+      return {
+        failed: answers.map((answer) => answer.failed).filter(Boolean),
+        items: answers.flatMap((answer) => answer.items)
+      }
     },
+    enabled: routes.length > 0,
     staleTime: 15000,
     refetchInterval: false,
     retry: 1
   })
 }
 
-/** The alert for one show's episode, if it was asked for. */
+/** The alert armed for one show's episode, on whichever host holds it. */
 function alertFor(alerts, mediaId, episode) {
   return (
-    (alerts || []).find((job) => {
+    ((alerts && alerts.items) || []).find(({ job }) => {
       const match = ALERT_RE.exec(String(job.name || ''))
 
       return !!match && Number(match[1]) === Number(mediaId) && Number(match[2]) === Number(episode)
@@ -1160,47 +1248,60 @@ function writeAlert(source, work) {
 
 /**
  * The one-shot: an ISO timestamp is a "once" job in the cron store, so this fires
- * at the moment AniList says the episode airs and then never again.
+ * at the moment AniList says the episode airs and then never again. Created on the
+ * destination the reader picked, which is what decides where it fires.
  */
-function createAlert(source, t, item, episode, airingAt) {
+function createAlert(source, t, item, episode, airingAt, route) {
   return writeAlert(source, () =>
-    host.request('cron.manage', {
+    cronCall(route, {
       action: 'add',
       name: `${ALERT_PREFIX}:${item.id}:e${episode}] ${item.title} — EP ${episode}`,
       schedule: new Date((airingAt || 0) * 1000).toISOString(),
-      prompt: t('alertPrompt', item.title, episode, `https://anilist.co/anime/${item.id}`),
-      ...alertScope()
+      prompt: t('alertPrompt', item.title, episode, `https://anilist.co/anime/${item.id}`)
     })
   )
 }
 
-function dropAlert(source, job) {
-  return writeAlert(source, () => host.request('cron.manage', { action: 'remove', name: job.job_id, ...alertScope() }))
+function dropAlert(source, job, route) {
+  return writeAlert(source, () => cronCall(route, { action: 'remove', name: job.job_id }))
 }
 
-function holdAlert(source, job, paused) {
-  return writeAlert(source, () =>
-    host.request('cron.manage', { action: paused ? 'pause' : 'resume', name: job.job_id, ...alertScope() })
-  )
+function holdAlert(source, job, paused, route) {
+  return writeAlert(source, () => cronCall(route, { action: paused ? 'pause' : 'resume', name: job.job_id }))
+}
+
+/** What a destination is called: the reader's own device, or the connection serving it. */
+function alertDestinationLabel(route, t) {
+  const name = (route && route.mode === 'local') || !(route && route.label) ? t('destinationLocal') : route.label
+  const profile = String((route && (route.targetProfile || route.profile)) || '')
+
+  return profile && profile !== 'default' ? `${name} · ${profile}` : name
 }
 
 /**
- * The alert for the next episode, on the show's own page.
+ * The alert for the next episode, on the show's own page — and the host it should
+ * run on.
  *
- * Offered only when AniList knows when that episode is — an alert with no time is
- * a job that never fires — and shown in both signing states, because a cron job
- * does not care whether the reader is signed in.
+ * Offered only when AniList knows when that episode is (an alert with no time is a
+ * job that never fires), and in both signing states, because a cron job does not
+ * care whether the reader is signed in. The destination is not decoration: this
+ * device only surfaces the run in the app, while a box with its own gateway and a
+ * messaging channel is the one that actually reaches a phone.
  */
 function AlertControl({ show, t }) {
   const source = useSource()
   const alerts = useAlerts()
+  const destinations = useDestinations()
+  const routes = destinations.data || []
+  const [chosen, setChosen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const episode = show.nextEpisode
 
   if (!episode || !show.airingAt) return null
 
-  const existing = alertFor(alerts.data, show.id, episode)
+  const armed = alertFor(alerts.data, show.id, episode)
+  const active = routes.find((route) => routeId(route) === chosen) || routes[0] || null
   const run = (work) => {
     setBusy(true)
     setFailure(null)
@@ -1211,37 +1312,68 @@ function AlertControl({ show, t }) {
   }
 
   return jsxs('div', {
-    className: 'flex flex-wrap items-center gap-2 pt-1',
+    className: 'flex flex-col gap-1 pt-1',
     children: [
-      existing
-        ? [
-            jsx(Badge, {
-              variant: 'muted',
-              children: t('alertActive', episode, runAtLabel(existing.next_run_at, t))
-            }),
-            jsx(Button, {
-              type: 'button',
-              variant: 'ghost',
-              size: 'sm',
-              disabled: busy,
-              onClick: () => {
-                haptic('tap')
-                void run(() => dropAlert(source, existing))
-              },
-              children: t('alertRemove')
+      jsxs('div', {
+        className: 'flex flex-wrap items-center gap-2',
+        children: [
+          armed
+            ? [
+                jsx(Badge, {
+                  variant: 'muted',
+                  children: t('alertActive', episode, runAtLabel(armed.job.next_run_at, t))
+                }),
+                jsx(Button, {
+                  type: 'button',
+                  variant: 'ghost',
+                  size: 'sm',
+                  disabled: busy,
+                  onClick: () => {
+                    haptic('tap')
+                    void run(() => dropAlert(source, armed.job, armed.route))
+                  },
+                  children: t('alertRemove')
+                })
+              ]
+            : jsx(Button, {
+                type: 'button',
+                variant: 'ghost',
+                size: 'sm',
+                disabled: busy || !active,
+                onClick: () => {
+                  haptic('tap')
+                  void run(() => createAlert(source, t, show, episode, show.airingAt, active))
+                },
+                children: t('alertAdd', episode)
+              })
+        ]
+      }),
+      // Armed, the row says where it lives; before that, this is the picker. One
+      // destination means no choice worth showing.
+      armed
+        ? jsx('div', {
+            className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
+            children: alertDestinationLabel(armed.route, t)
+          })
+        : routes.length > 1
+          ? jsxs('div', {
+              className: 'flex flex-wrap items-center gap-2',
+              children: [
+                jsx('div', {
+                  className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+                  children: t('alertDestination')
+                }),
+                jsx(SegmentedControl, {
+                  onChange: (next) => {
+                    haptic('selection')
+                    setChosen(next)
+                  },
+                  options: routes.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
+                  value: routeId(active)
+                })
+              ]
             })
-          ]
-        : jsx(Button, {
-            type: 'button',
-            variant: 'ghost',
-            size: 'sm',
-            disabled: busy,
-            onClick: () => {
-              haptic('tap')
-              void run(() => createAlert(source, t, show, episode, show.airingAt))
-            },
-            children: t('alertAdd', episode)
-          }),
+          : null,
       failure
         ? jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-quaternary)', children: t('alertFailed') })
         : null
@@ -1532,8 +1664,8 @@ function AccountPanel() {
   })
 }
 
-/** One alert: what it is, when it fires, and the two things you can do to it. */
-function AlertRow({ job, t }) {
+/** One alert: what it is, where it runs, when it fires, and what you can do to it. */
+function AlertRow({ job, route, t }) {
   const source = useSource()
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
@@ -1562,6 +1694,9 @@ function AlertRow({ job, t }) {
             className: 'flex items-center gap-1.5 text-[0.6875rem] text-(--ui-text-quaternary)',
             children: [
               jsx('span', { children: failure ? t('alertFailed') : runAtLabel(job.next_run_at, t) }),
+              // Which host holds it decides where it delivers, so it is part of
+              // the row and not a detail buried elsewhere.
+              jsx('span', { className: 'truncate', children: alertDestinationLabel(route, t) }),
               paused ? jsx(Badge, { variant: 'muted', children: t('alertPaused') }) : null
             ]
           })
@@ -1574,7 +1709,7 @@ function AlertRow({ job, t }) {
         disabled: busy,
         onClick: () => {
           haptic('tap')
-          void run(() => holdAlert(source, job, !paused))
+          void run(() => holdAlert(source, job, !paused, route))
         },
         children: paused ? t('alertResume') : t('alertPause')
       }),
@@ -1585,7 +1720,7 @@ function AlertRow({ job, t }) {
         disabled: busy,
         onClick: () => {
           haptic('tap')
-          void run(() => dropAlert(source, job))
+          void run(() => dropAlert(source, job, route))
         },
         children: t('alertRemove')
       })
@@ -1594,9 +1729,9 @@ function AlertRow({ job, t }) {
 }
 
 /**
- * The alerts this plugin created, from the store that actually holds them. The
- * pane has to be able to cancel what it started, and the gateway is the only
- * place that knows — including about the ones paused from `hermes cron`.
+ * The alerts this plugin created, from the stores that actually hold them — every
+ * destination it can reach, each row naming its host. The pane has to be able to
+ * cancel what it started, and only the gateway that owns a job can do that.
  */
 function AlertsPanel() {
   const t = usePluginI18n(ID)
@@ -1605,7 +1740,8 @@ function AlertsPanel() {
     className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
     children: t('alerts')
   })
-  const jobs = alerts.data || []
+  const items = (alerts.data && alerts.data.items) || []
+  const failed = (alerts.data && alerts.data.failed) || []
 
   if (alerts.isLoading) {
     return jsxs('div', {
@@ -1626,12 +1762,18 @@ function AlertsPanel() {
     className: 'flex flex-col gap-2',
     children: [
       label,
-      jobs.length === 0
+      items.length === 0
         ? jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-quaternary)', children: t('alertEmpty') })
         : jsx('div', {
             className: 'flex flex-col',
-            children: jobs.map((job) => jsx(AlertRow, { job, t }, job.job_id))
+            children: items.map(({ job, route }) => jsx(AlertRow, { job, route, t }, `${routeId(route)}:${job.job_id}`))
+          }),
+      failed.length > 0
+        ? jsx('div', {
+            className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
+            children: failed.map((route) => t('alertsHostUnreachable', alertDestinationLabel(route, t))).join(' ')
           })
+        : null
     ]
   })
 }

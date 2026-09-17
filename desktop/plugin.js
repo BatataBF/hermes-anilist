@@ -165,9 +165,11 @@ const STRINGS = {
     // What the job runs, wherever it runs: the ids are baked in because that host
     // may not have this plugin — the public API is all it needs.
     digestPrompt: (ids) =>
-      `Anime digest for today. Ask the public AniList API (POST https://graphql.anilist.co, no auth needed) about these ids: ${ids}. ` +
-      `Report the episodes that air TODAY; if none do, say so and name tomorrow's. One line per show: title, episode number, local time, ` +
-      `and https://anilist.co/anime/<id>. If nothing airs, reply exactly: Nothing from your list airs today.`,
+      `Anime digest for today. Ask the public AniList API (POST https://graphql.anilist.co; if it answers 403, retry with a browser User-Agent) ` +
+      `about these ids: ${ids}.\n\nYour reply IS the message that gets sent: start straight with the content — no preamble, no notes, ` +
+      `no questions, no mention of tools or verification, and nothing after the last link.\n\n` +
+      `Format: one line per show airing TODAY, "Title — ep N — HH:MM — https://anilist.co/anime/<id>". ` +
+      `If nothing airs today, list tomorrow's in the same format and start the message with "Nothing today; tomorrow:".`,
     // What the cron job runs: a prompt the agent acts on at airing time.
     alertPrompt: (title, episode, url) =>
       `Tell me right away: ${title} — episode ${episode} has just aired. Details: ${url}`,
@@ -292,9 +294,11 @@ const STRINGS = {
     // Lo que corre el job, donde sea que corra: los ids van incrustados porque ese
     // host puede no tener el plugin — la API pública es todo lo que necesita.
     digestPrompt: (ids) =>
-      `Resumen de anime de hoy. Consultá la API pública de AniList (POST https://graphql.anilist.co, sin autenticación) para estos ids: ${ids}. ` +
-      `Reportá los episodios que salen HOY; si no sale ninguno, decilo y nombra los de mañana. Una línea por serie: título, número de episodio, ` +
-      `hora local y https://anilist.co/anime/<id>. Si no sale nada, respondé exactamente: Hoy no sale nada de tu lista.`,
+      `Resumen diario de anime. Consultá la API pública de AniList (POST https://graphql.anilist.co; si responde 403, reintentá con User-Agent de navegador) ` +
+      `para estos ids: ${ids}.\n\nTu respuesta ES el mensaje que se envía: empezá directo con el contenido — sin introducción, sin notas, ` +
+      `sin preguntas, sin mencionar herramientas ni verificaciones, y nada después del último link.\n\n` +
+      `Formato: una línea por serie que sale HOY, "Título — ep N — HH:MM — https://anilist.co/anime/<id>". ` +
+      `Si hoy no sale nada, listá los de mañana con el mismo formato y empezá el mensaje con "Hoy no sale nada; mañana:".`,
     // Lo que corre el cronjob: un prompt que el agente ejecuta al airear.
     alertPrompt: (title, episode, url) =>
       `Avisame al toque: ${title} — el episodio ${episode} acaba de salir al aire. Ficha: ${url}`,

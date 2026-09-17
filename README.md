@@ -41,6 +41,9 @@ The renderer never holds a credential: it only ever sees public data and a `conf
   **Choose the host it runs on**: an alert scheduled on a connection that runs its own gateway (with
   Telegram configured, say) is the one that reaches your phone; "this device" only surfaces the run
   inside the app.
+- **Daily digest**: one message a day at the hour you pick with what airs from your list, delivered
+  through the same host/channel choice. It carries the ids and asks AniList's public API itself, so it
+  works on a host that does not have this plugin installed.
 - **A per-show detail**: cover, format, status, length, duration, score, studio, genres, the next
   episode's countdown, the full description, the episode list, and the tracking controls (status,
   progress ±, remove).

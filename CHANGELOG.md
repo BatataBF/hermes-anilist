@@ -31,6 +31,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   scheduler's pre-dispatch validation, says so on its row. *(The daily digest is the other half of L4
   and is not built yet.)*
 
+- **Daily digest.** One message a day with what airs from the reader's list, armed from Settings: same store,
+  same destination and same delivery target as an alert, but recurring — on a cron expression, which is the one
+  schedule form the app's own editor reads back without choking. The ids of everything that can still air are
+  baked in at arm time, and the prompt is self-contained: it asks AniList's public API itself, because the job
+  runs on whichever host was picked and **that host may not have this plugin installed**. Verified against a
+  real 72-id list — the message arrives as one line per show, no preamble, no notes, no questions.
+  *(L4 is complete with this.)*
+
 ## [0.6.0] - 2026-09-17
 
 ### Added

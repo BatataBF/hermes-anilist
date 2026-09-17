@@ -78,8 +78,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   footer doors (*See everything* / *Search a show*) also share one style, instead of a bordered button
   sitting beside a plain label.
 - **Handler copy speaks the active locale.** The chip's fallback notice, the refresh toast and the
-  three palette labels were hardcoded English (`STRINGS.en.…`): they go through `ctx.i18n.t` now, so a
-  Spanish install says *AniList actualizado* and ⌘K reads *AniList: Ajustes*.
+  three palette labels were hardcoded English (`STRINGS.en.…`): they go through `ctx.i18n.t` now, so an
+  install whose language is Spanish gets its own copy instead of the English fallback, and the palette
+  labels follow the app's configured language.
   `tools/i18n_audit.mjs` keeps both locales honest — 117 keys, none missing, none skewed — with its
   scan bounded to the `STRINGS` literal (the naive version picked up `queryKey:`/`className:` from the
   code below the last locale and read them as skew).
@@ -103,8 +104,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - **The stitched airing window ignored the rate floor.** `_cached` checks the budget before the
   first request, but a 7-day window is up to `MAX_AIRING_PAGES` cursor pages — a dense season could
   spend the last of the host's shared 30/minute on a continuation page. The loop now stops between
-  pages when the floor trips, keeps what the first page returned, and leaves `hasNextPage` true so
-  *Ver más* can continue later.
+  pages when the floor trips, keeps what the first page returned, and leaves `hasNextPage` true so the
+  *Show more* footer can continue later.
 - **The delivery picker crashed the workspace.** Its value read a bare `alertDelivery` that the
   preference refactor had already moved onto `settings` — the render threw
   `ReferenceError: alertDelivery is not defined`, the app's error boundary caught it, and the pane

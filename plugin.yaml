@@ -20,17 +20,11 @@ tags:
   - anilist
   - tracker
 python_dependencies:
-  - "httpx>=0.28.1,<1"     # declared, never auto-installed: surfaced by install/doctor when missing
-config_schema:
-  client_id:
-    type: str
-    default: ""
-    description: "AniList OAuth client ID (public, not a secret). Empty until the app is registered."
-  airing_days:
-    type: int
-    default: 7
-    description: "How many days ahead the airing feed covers."
-  notify_mode:
-    type: str
-    default: "exact"
-    description: "Default alert mode for the episode-alert action: 'exact' (one-shot at airing time) or 'digest'."
+  # Resolved together with Hermes' own ranges and installed into the venv by
+  # `hermes plugins install` / `enable`; re-applied after `hermes update`.
+  - "httpx>=0.28.1,<1"
+# No `config_schema` on purpose: this plugin has no user-visible server-side
+# settings. Preferences (feed window, title language, covers, alert destination
+# and channel) are client-side, in the desktop half's own storage; the AniList
+# client id lives in the plugin's profile-scoped state — every account
+# registers its own app — and the token in the profile's `.env`.

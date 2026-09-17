@@ -3,9 +3,10 @@
 AniList tracker pane for **Hermes Desktop** — airing countdowns, season browser and episode alerts,
 without leaving the app.
 
-> **Status: early development.** The pane, the AniList backend (read *and* write) and the pin-flow
-> sign-in all work today: sign in and **Mi lista** becomes your own AniList list, which you can edit
-> from here too. Cron episode alerts land in the next phase; see [Roadmap](#roadmap).
+> **Status: early development.** The pane, the AniList backend (read *and* write), the pin-flow
+> sign-in, and the cron alerts + daily digest all work today: sign in and **My list** becomes your own
+> AniList list, which you can edit from here too. Hardening and the catalog submission are next; see
+> [Roadmap](#roadmap).
 
 ## What it is
 
@@ -22,12 +23,12 @@ The renderer never holds a credential: it only ever sees public data and a `conf
 ## What you can do today
 
 - **Upcoming episodes** in the chip, with a countdown per row. The list is sectioned by *local*
-  calendar day (**Hoy / Mañana / Dom 20**) and the window is a setting (3 / 7 / 14 days). The backend
-  stitches AniList's pages so a 7-day window really covers 7 days, and a cursor-backed **Ver más**
+  calendar day (**Today / Tomorrow / Fri 19**) and the window is a setting (3 / 7 / 14 days). The backend
+  stitches AniList's pages so a 7-day window really covers 7 days, and a cursor-backed **Show more**
   reaches deeper when a window is dense.
 - **Seasons and search**: browse any season/year, or search a title (debounced, one request per word).
 - **A local watchlist**: star any show from the feed, the season browser or the search results. The
-  **Mi lista** filter then narrows the feed to what you track — your next 7 days are a handful of
+  **My list** filter then narrows the feed to what you track — your next 7 days are a handful of
   episodes, not a hundred. Statuses are AniList's own five (`watching`, `completed`, `planned`,
   `paused`, `dropped`) — the vocabulary the account's list is written in.
 - **Your AniList account**: sign in once (the OAuth **pin** flow, no callback server) and the list the
@@ -125,11 +126,11 @@ Desktop pane (renderer)          Backend (gateway/serve process)        AniList
 - [x] **L1 · feed and browsing** — airing countdowns, day sections, season browser, search, window
   filter, settings. (shipped in `0.4.0`)
 - [x] **L2 · watchlist and detail** — a local watchlist with AniList's status vocabulary, per-show
-  detail with the episode list, tracking from any row, the **Mi lista** filter. (shipped in `0.5.0`)
+  detail with the episode list, tracking from any row, the **My list** filter. (shipped in `0.5.0`)
 - [x] **L3 · sign-in** — AniList OAuth **pin** flow, the token in the backend `.env`, and the
   account's own list read *and* written (status, progress, removals). (shipped in `0.6.0`)
-- [ ] **L4 · alerts** — an action that creates a cronjob per show. The **exact one-shot at airing
-  time** ships (with the pane listing, pausing and cancelling them); the daily digest is next.
+- [x] **L4 · alerts** — an action that creates a cron job per show, plus the daily digest, both with a
+  destination and a delivery channel remembered between them. (shipped in `0.7.0`)
 - [ ] **L5 · hardening** — i18n review, docs, catalog submission (`category: desktop`,
   `tier: community`), a release candidate before `1.0.0`.
 
@@ -139,10 +140,12 @@ What `1.0.0` means here: updating never breaks your settings or your list — a 
 ## Development
 
 ```bash
-python3 -m pytest tests/ -q                 # offline unit tests (no network)
+uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q   # offline, no network
+node tools/test_plugin_helpers.mjs           # the desktop half's pure helpers, no app needed
+node tools/i18n_audit.mjs desktop/plugin.js  # locale parity: used/undefined, defined/unused, skew
 python3 tools/lint_plugin_js.py desktop/plugin.js   # identifiers used but never declared
-hermes plugins doctor "$(pwd)" --ci         # real discovery + register(ctx) contracts
-hermes plugins validate "$(pwd)"            # the same gate the plugin catalog CI runs
+hermes plugins doctor "$(pwd)" --ci          # real discovery + register(ctx) contracts
+hermes plugins validate "$(pwd)"             # the same gate the plugin catalog CI runs
 ```
 
 The desktop half is loaded **uncompiled**: a stale identifier left behind by a rename parses fine

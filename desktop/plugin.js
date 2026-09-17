@@ -392,7 +392,7 @@ const DELIVERY_NAMES = { telegram: 'Telegram', discord: 'Discord' }
 const DIGEST_PREFIX = '[anilist:digest]'
 const DIGEST_HOURS = [8, 9, 12, 20]
 // A completed or dropped show cannot air; everything else can.
-const DIGEST_STATUSES = ['watching', 'rewatching', 'paused', 'planned', 'planning']
+const DIGEST_STATUSES = ['watching', 'rewatching', 'paused', 'planned']
 const DEFAULT_SETTINGS = {
   covers: true,
   defaultFilter: 'week',
@@ -1182,8 +1182,14 @@ function alertScope() {
   return profile ? { profile } : {}
 }
 
-function isAlert(job) {
+/** Everything this plugin owns on a host — alerts and the digest share the namespace. */
+function isAniListJob(job) {
   return String((job && job.name) || '').toLowerCase().startsWith(ALERT_PREFIX)
+}
+
+/** An episode alert. The digest has its own row and its own controls — never an alert row. */
+function isAlert(job) {
+  return isAniListJob(job) && !isDigest(job)
 }
 
 function alertsKey(source) {
@@ -1269,19 +1275,25 @@ function useAlerts() {
         routes.map(async (route) => {
           try {
             const data = await cronCall(route, { action: 'list', include_disabled: true })
+            const ours = (data && Array.isArray(data.jobs) ? data.jobs : []).filter(isAniListJob)
 
-            return { failed: null, items: (data && Array.isArray(data.jobs) ? data.jobs : []).filter(isAlert).map((job) => ({ job, route })) }
+            return { failed: null, ours, route }
           } catch (error) {
             console.warn('[anilist] alerts: could not ask', routeId(route), error)
 
-            return { failed: route, items: [] }
+            return { failed: route, ours: [] }
           }
         })
       )
+      const ours = answers.flatMap((answer) => answer.ours.map((job) => ({ job, route: answer.route })))
 
       return {
         failed: answers.map((answer) => answer.failed).filter(Boolean),
-        items: answers.flatMap((answer) => answer.items)
+        // `items` is what the Alerts pane lists; `all` is everything this plugin
+        // owns there (the digest included) and is what the destination fallback
+        // reads — "where my jobs already are" must see a lone digest too.
+        all: ours,
+        items: ours.filter(({ job }) => isAlert(job))
       }
     },
     enabled: routes.length > 0,
@@ -1477,7 +1489,7 @@ function DigestPanel() {
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const ids = digestIds(tracked.entries)
-  const existing = (alerts.data && alerts.data.items) || []
+  const existing = (alerts.data && alerts.data.all) || []
   const armed = existing.find((item) => isDigest(item.job)) || null
   const active = preferredRoute(routes, settings.alertRoute, existing[0] && routeId(existing[0].route))
   const remote = !!active && active.mode !== 'local'
@@ -1608,7 +1620,7 @@ function AlertControl({ show, t }) {
   if (!episode || !show.airingAt) return null
 
   const armed = alertFor(alerts.data, show.id, episode)
-  const existing = (alerts.data && alerts.data.items) || []
+  const existing = (alerts.data && alerts.data.all) || []
   const active = preferredRoute(routes, settings.alertRoute, existing[0] && routeId(existing[0].route))
   // This device has exactly one sensible answer: the run shows up in the app that
   // is already open. Another host is the case where the channel matters.
@@ -2133,7 +2145,9 @@ function SettingsPanel() {
   const settings = useValue($settings)
   const destinations = useDestinations().data || []
   const alertJobs = useAlerts().data
-  const alerts = (alertJobs && alertJobs.items) || []
+  // Everything this plugin owns there (alerts and the digest): the destination
+  // rung is "where my jobs already are", not "where my alerts are".
+  const owned = (alertJobs && alertJobs.all) || []
   const [filter, setFilter] = useAiringFilter()
 
   return jsxs('div', {
@@ -2161,7 +2175,7 @@ function SettingsPanel() {
             saveSettings({ alertRoute: next })
           },
           options: destinations.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
-          value: routeId(preferredRoute(destinations, settings.alertRoute, alerts[0] && routeId(alerts[0].route)))
+          value: routeId(preferredRoute(destinations, settings.alertRoute, owned[0] && routeId(owned[0].route)))
         })
       }),
       jsx(Separator, {}),

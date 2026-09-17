@@ -69,6 +69,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Fixed
 
+- **The daily digest was listed as an episode alert.** `isAlert` matched the shared `[anilist` prefix
+  and the digest is named `[anilist:digest] …`, so Settings showed it twice: a row under *Alerts* with
+  Pause/Remove control, plus its own section. The alert predicate now excludes it, and the list the
+  destination fallback reads still sees every job this plugin owns — digest included.
 - **The stitched airing window ignored the rate floor.** `_cached` checks the budget before the
   first request, but a 7-day window is up to `MAX_AIRING_PAGES` cursor pages — a dense season could
   spend the last of the host's shared 30/minute on a continuation page. The loop now stops between

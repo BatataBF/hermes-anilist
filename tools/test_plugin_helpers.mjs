@@ -48,7 +48,7 @@ const grabConst = (name) => {
 const CONSTS = ['STRINGS', 'DEFAULT_SETTINGS', 'ALERT_PREFIX', 'ALERT_RE', 'DIGEST_PREFIX', 'DIGEST_STATUSES', 'DELIVERY_NAMES']
 const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
-  'titleOf', 'routeId', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
+  'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
   'preferredRoute', 'runAtLabel'
 ]

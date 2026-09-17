@@ -8,6 +8,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.7.0] - 2026-09-17
+
+### Added
+
 - **Episode alerts.** Any show with a known next episode can be armed from its own page: the plugin
   creates a cron job that fires the moment that episode airs. The job lives in the **profile's own
   cron store** — through the gateway's `cron.manage` RPC, the same door the app's scheduled surfaces
@@ -52,7 +60,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   each under a labeled group, with the digest beside the alerts it belongs to and never in the popover.
 - **Named actions instead of glyphs.** Refresh says *Refresh*; arming an alert or the digest is the primary
   button rather than another ghost one; the chip names the show it is counting down to (its tooltip says
-  the whole thing.
+  the whole thing).
 
 - **The answer cache is bounded.** Every key is a question (a query at a page, a window at a cursor)
   and a long-lived gateway mints hundreds of them: the cache now holds at most 256 entries, evicting
@@ -81,7 +89,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   three palette labels were hardcoded English (`STRINGS.en.…`): they go through `ctx.i18n.t` now, so an
   install whose language is Spanish gets its own copy instead of the English fallback, and the palette
   labels follow the app's configured language.
-  `tools/i18n_audit.mjs` keeps both locales honest — 117 keys, none missing, none skewed — with its
+  `tools/i18n_audit.mjs` keeps both locales honest — 118 keys, none missing, none skewed — with its
   scan bounded to the `STRINGS` literal (the naive version picked up `queryKey:`/`className:` from the
   code below the last locale and read them as skew).
 - **The desktop half is under test.** `tools/test_plugin_helpers.mjs` lifts the pure helpers out of

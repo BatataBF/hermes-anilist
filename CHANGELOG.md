@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Episode alerts.** Any show with a known next episode can be armed from its own page: the plugin
+  creates a cron job that fires the moment that episode airs. The job lives in the **profile's own
+  cron store** — through the gateway's `cron.manage` RPC, the same door the app's scheduled surfaces
+  use — so it keeps firing with Hermes closed and shows up in `hermes cron list` like any other job.
+  The schedule sent is the ISO timestamp AniList reports, which the store turns into a one-shot, and
+  the name is namespaced (`[anilist:<media id>:e<episode>] <title> — EP <n>`) so the pane can find
+  its own again. Settings ▸ *Alerts* lists them with pause/resume and remove, and the show's page says
+  whether its next episode is armed. It works signed out: an air date is public, and a cron job does
+  not care who is logged in. *(The daily digest is the other half of L4 and is not built yet.)*
+
 ## [0.6.0] - 2026-09-17
 
 ### Added

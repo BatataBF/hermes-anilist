@@ -35,6 +35,10 @@ The renderer never holds a credential: it only ever sees public data and a `conf
   star a show to add it, set its status (including *rewatching*), step the progress, or take it off
   the list — that last one behind a confirmation, because it deletes the entry on AniList. Signed out,
   everything above still works against the local watchlist.
+- **Episode alerts**: ask to be told about the next episode and the plugin creates a cron job in your
+  profile that fires when it airs — it survives closing Hermes, it shows up in `hermes cron list`, and
+  Settings ▸ *Alerts* is where you pause, resume or cancel it. Signed out works too: the air date is
+  public.
 - **A per-show detail**: cover, format, status, length, duration, score, studio, genres, the next
   episode's countdown, the full description, the episode list, and the tracking controls (status,
   progress ±, remove).
@@ -116,8 +120,8 @@ Desktop pane (renderer)          Backend (gateway/serve process)        AniList
   detail with the episode list, tracking from any row, the **Mi lista** filter. (shipped in `0.5.0`)
 - [x] **L3 · sign-in** — AniList OAuth **pin** flow, the token in the backend `.env`, and the
   account's own list read *and* written (status, progress, removals). (shipped in `0.6.0`)
-- [ ] **L4 · alerts** — an action that creates a cronjob per show (exact one-shot at airing time, or
-  a daily digest), with the jobs listed and cancellable from the pane.
+- [ ] **L4 · alerts** — an action that creates a cronjob per show. The **exact one-shot at airing
+  time** ships (with the pane listing, pausing and cancelling them); the daily digest is next.
 - [ ] **L5 · hardening** — i18n review, docs, catalog submission (`category: desktop`,
   `tier: community`), a release candidate before `1.0.0`.
 

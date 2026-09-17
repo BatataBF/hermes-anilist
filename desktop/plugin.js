@@ -139,6 +139,19 @@ const STRINGS = {
     confirmRemoveTitle: (title) => `Remove “${title}” from your list?`,
     confirmRemoveBody: 'This deletes the entry on AniList — its score, notes and progress go with it.',
     confirmRemoveAction: 'Remove',
+    alerts: 'Alerts',
+    alertAdd: (episode) => `Alert me when EP ${episode} airs`,
+    alertActive: (episode, when) => `EP ${episode} alert${when ? ` · ${when}` : ''}`,
+    alertRemove: 'Remove',
+    alertPause: 'Pause',
+    alertResume: 'Resume',
+    alertPaused: 'paused',
+    alertEmpty: 'No alerts yet. Open a show and ask to be told when its next episode airs.',
+    alertFailed: 'The alert could not be saved.',
+    alertsUnavailable: 'Alerts need the Hermes gateway.',
+    // What the cron job runs: a prompt the agent acts on at airing time.
+    alertPrompt: (title, episode, url) =>
+      `Tell me right away: ${title} — episode ${episode} has just aired. Details: ${url}`,
     accountToken: 'Paste the token AniList shows',
     accountConnect: 'Connect',
     accountConnectedAs: (name) => `Connected as ${name}`,
@@ -234,6 +247,19 @@ const STRINGS = {
     confirmRemoveTitle: (title) => `¿Quitar “${title}” de tu lista?`,
     confirmRemoveBody: 'Esto borra la entrada en AniList: se van con ella su puntaje, sus notas y su progreso.',
     confirmRemoveAction: 'Quitar',
+    alerts: 'Alertas',
+    alertAdd: (episode) => `Avisarme cuando salga el EP ${episode}`,
+    alertActive: (episode, when) => `Alerta EP ${episode}${when ? ` · ${when}` : ''}`,
+    alertRemove: 'Quitar',
+    alertPause: 'Pausar',
+    alertResume: 'Reanudar',
+    alertPaused: 'en pausa',
+    alertEmpty: 'Todavía no hay alertas. Abrí una serie y pedí que te avise cuando salga el próximo episodio.',
+    alertFailed: 'No se pudo guardar la alerta.',
+    alertsUnavailable: 'Las alertas necesitan el gateway de Hermes.',
+    // Lo que corre el cronjob: un prompt que el agente ejecuta al airear.
+    alertPrompt: (title, episode, url) =>
+      `Avisame al toque: ${title} — el episodio ${episode} acaba de salir al aire. Ficha: ${url}`,
     accountToken: 'Pegá el token que muestra AniList',
     accountConnect: 'Conectar',
     accountConnectedAs: (name) => `Conectada como ${name}`,
@@ -1046,6 +1072,183 @@ function SettingsRow({ children, label }) {
   })
 }
 
+// ─── alerts (L4: one cron job per episode you want to hear about) ────────────
+
+/**
+ * An alert IS a cron job, created through the gateway's own `cron.manage` RPC —
+ * the same door the app's own scheduled surfaces use.
+ *
+ * It lives in the profile's cron store rather than this plugin's state, which is
+ * the point: it keeps firing with Hermes closed, it shows up in `hermes cron
+ * list` like any other job, and the user can cancel it from either place. What
+ * makes it findable again is the name, namespaced the way the app tags its own:
+ * `[anilist:<media id>:e<episode>] <title> — EP <n>`.
+ */
+const ALERT_PREFIX = '[anilist'
+const ALERT_RE = /^\[anilist:(\d+):e(\d+)\]/i
+
+/** The profile whose cron store the alerts belong to, when the gateway took one. */
+function alertScope() {
+  const profile = host.state.profile.get()
+
+  return profile ? { profile } : {}
+}
+
+function isAlert(job) {
+  return String((job && job.name) || '').toLowerCase().startsWith(ALERT_PREFIX)
+}
+
+function alertsKey(source) {
+  return [SOURCE, source.id, source.profile, 'alerts']
+}
+
+/** What this plugin created, read back from the gateway. */
+function useAlerts() {
+  const source = useSource()
+
+  return useQuery({
+    queryKey: alertsKey(source),
+    queryFn: async () => {
+      // Paused jobs come back too: one the reader paused here must not vanish
+      // from the pane that is the only place to resume it.
+      const data = await host.request('cron.manage', { action: 'list', include_disabled: true, ...alertScope() })
+
+      return (data && Array.isArray(data.jobs) ? data.jobs : []).filter(isAlert)
+    },
+    staleTime: 15000,
+    refetchInterval: false,
+    retry: 1
+  })
+}
+
+/** The alert for one show's episode, if it was asked for. */
+function alertFor(alerts, mediaId, episode) {
+  return (
+    (alerts || []).find((job) => {
+      const match = ALERT_RE.exec(String(job.name || ''))
+
+      return !!match && Number(match[1]) === Number(mediaId) && Number(match[2]) === Number(episode)
+    }) || null
+  )
+}
+
+/** The tag is for finding the job again; the reader only needs the rest. */
+function alertTitle(job) {
+  return String((job && job.name) || '').replace(/^\[anilist[^\]]*\]\s*/i, '')
+}
+
+/** "hoy 19:30" / "17 oct 19:30" — when a job will fire, in the reader's calendar. */
+function runAtLabel(iso, t) {
+  const date = new Date(iso || 0)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  const today = new Date()
+
+  if (date.toDateString() === today.toDateString()) return `${t('dayToday')} ${time}`
+
+  return `${date.getDate()} ${t('monthName', date.getMonth())} ${time}`
+}
+
+function writeAlert(source, work) {
+  return work().then((result) => {
+    void queryClient.invalidateQueries({ queryKey: alertsKey(source) })
+
+    return result
+  })
+}
+
+/**
+ * The one-shot: an ISO timestamp is a "once" job in the cron store, so this fires
+ * at the moment AniList says the episode airs and then never again.
+ */
+function createAlert(source, t, item, episode, airingAt) {
+  return writeAlert(source, () =>
+    host.request('cron.manage', {
+      action: 'add',
+      name: `${ALERT_PREFIX}:${item.id}:e${episode}] ${item.title} — EP ${episode}`,
+      schedule: new Date((airingAt || 0) * 1000).toISOString(),
+      prompt: t('alertPrompt', item.title, episode, `https://anilist.co/anime/${item.id}`),
+      ...alertScope()
+    })
+  )
+}
+
+function dropAlert(source, job) {
+  return writeAlert(source, () => host.request('cron.manage', { action: 'remove', name: job.job_id, ...alertScope() }))
+}
+
+function holdAlert(source, job, paused) {
+  return writeAlert(source, () =>
+    host.request('cron.manage', { action: paused ? 'pause' : 'resume', name: job.job_id, ...alertScope() })
+  )
+}
+
+/**
+ * The alert for the next episode, on the show's own page.
+ *
+ * Offered only when AniList knows when that episode is — an alert with no time is
+ * a job that never fires — and shown in both signing states, because a cron job
+ * does not care whether the reader is signed in.
+ */
+function AlertControl({ show, t }) {
+  const source = useSource()
+  const alerts = useAlerts()
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState(null)
+  const episode = show.nextEpisode
+
+  if (!episode || !show.airingAt) return null
+
+  const existing = alertFor(alerts.data, show.id, episode)
+  const run = (work) => {
+    setBusy(true)
+    setFailure(null)
+
+    return work()
+      .catch((error) => setFailure(error))
+      .finally(() => setBusy(false))
+  }
+
+  return jsxs('div', {
+    className: 'flex flex-wrap items-center gap-2 pt-1',
+    children: [
+      existing
+        ? [
+            jsx(Badge, {
+              variant: 'muted',
+              children: t('alertActive', episode, runAtLabel(existing.next_run_at, t))
+            }),
+            jsx(Button, {
+              type: 'button',
+              variant: 'ghost',
+              size: 'sm',
+              disabled: busy,
+              onClick: () => {
+                haptic('tap')
+                void run(() => dropAlert(source, existing))
+              },
+              children: t('alertRemove')
+            })
+          ]
+        : jsx(Button, {
+            type: 'button',
+            variant: 'ghost',
+            size: 'sm',
+            disabled: busy,
+            onClick: () => {
+              haptic('tap')
+              void run(() => createAlert(source, t, show, episode, show.airingAt))
+            },
+            children: t('alertAdd', episode)
+          }),
+      failure
+        ? jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-quaternary)', children: t('alertFailed') })
+        : null
+    ]
+  })
+}
+
 // ─── account (AniList sign-in) ──────────────────────────────────────────────
 
 /** Where the sign-in stands, per source. The token itself never comes back here. */
@@ -1329,7 +1532,115 @@ function AccountPanel() {
   })
 }
 
-/** Client-side preferences: they shape what is shown, never what is fetched. */
+/** One alert: what it is, when it fires, and the two things you can do to it. */
+function AlertRow({ job, t }) {
+  const source = useSource()
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState(null)
+  const paused = job.state === 'paused' || job.enabled === false
+  const run = (work) => {
+    setBusy(true)
+    setFailure(null)
+
+    return work()
+      .catch((error) => setFailure(error))
+      .finally(() => setBusy(false))
+  }
+
+  return jsxs('div', {
+    className: 'flex items-center justify-between gap-2 rounded px-1 py-1 hover:bg-(--chrome-action-hover)',
+    children: [
+      jsxs('div', {
+        className: 'min-w-0 flex-1',
+        children: [
+          jsx('div', {
+            className: 'truncate text-xs text-(--ui-text-secondary)',
+            title: alertTitle(job),
+            children: alertTitle(job)
+          }),
+          jsxs('div', {
+            className: 'flex items-center gap-1.5 text-[0.6875rem] text-(--ui-text-quaternary)',
+            children: [
+              jsx('span', { children: failure ? t('alertFailed') : runAtLabel(job.next_run_at, t) }),
+              paused ? jsx(Badge, { variant: 'muted', children: t('alertPaused') }) : null
+            ]
+          })
+        ]
+      }),
+      jsx(Button, {
+        type: 'button',
+        variant: 'ghost',
+        size: 'sm',
+        disabled: busy,
+        onClick: () => {
+          haptic('tap')
+          void run(() => holdAlert(source, job, !paused))
+        },
+        children: paused ? t('alertResume') : t('alertPause')
+      }),
+      jsx(Button, {
+        type: 'button',
+        variant: 'ghost',
+        size: 'sm',
+        disabled: busy,
+        onClick: () => {
+          haptic('tap')
+          void run(() => dropAlert(source, job))
+        },
+        children: t('alertRemove')
+      })
+    ]
+  })
+}
+
+/**
+ * The alerts this plugin created, from the store that actually holds them. The
+ * pane has to be able to cancel what it started, and the gateway is the only
+ * place that knows — including about the ones paused from `hermes cron`.
+ */
+function AlertsPanel() {
+  const t = usePluginI18n(ID)
+  const alerts = useAlerts()
+  const label = jsx('div', {
+    className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+    children: t('alerts')
+  })
+  const jobs = alerts.data || []
+
+  if (alerts.isLoading) {
+    return jsxs('div', {
+      className: 'flex flex-col gap-2',
+      children: [label, jsx(Skeleton, { className: 'h-8 w-full' })]
+    })
+  }
+
+  // A gateway that cannot answer is not "no alerts": say which it is.
+  if (alerts.isError) {
+    return jsxs('div', {
+      className: 'flex flex-col gap-1',
+      children: [label, jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-quaternary)', children: t('alertsUnavailable') })]
+    })
+  }
+
+  return jsxs('div', {
+    className: 'flex flex-col gap-2',
+    children: [
+      label,
+      jobs.length === 0
+        ? jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-quaternary)', children: t('alertEmpty') })
+        : jsx('div', {
+            className: 'flex flex-col',
+            children: jobs.map((job) => jsx(AlertRow, { job, t }, job.job_id))
+          })
+    ]
+  })
+}
+
+/**
+ * Settings: client-side preferences (they shape what is shown, never what is
+ * fetched), then the account it will not touch without a token, then the alerts
+ * it created outside Hermes.
+ */
 function SettingsPanel() {
   const t = usePluginI18n(ID)
   const settings = useValue($settings)
@@ -1340,6 +1651,10 @@ function SettingsPanel() {
     children: [
       // The account first: it is the one setting that has a step outside Hermes.
       jsx(AccountPanel, {}),
+      jsx(Separator, {}),
+      // Alerts are cron jobs in the profile's own store — same class of thing:
+      // real state that lives outside the plugin, with a list worth showing.
+      jsx(AlertsPanel, {}),
       jsx(Separator, {}),
       jsx(SettingsRow, {
         label: t('settingTitleLanguage'),
@@ -1945,7 +2260,10 @@ function DetailPanel({ compact = false }) {
                         onClick: addToList,
                         children: t('addToList')
                       })
-                })
+                }),
+                // Independent of the account: an alert is a cron job, and the air
+                // dates it needs are public — signed out works the same.
+                jsx(AlertControl, { show, t })
               ]
             })
           ]

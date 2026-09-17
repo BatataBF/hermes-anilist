@@ -123,7 +123,7 @@ const STRINGS = {
       ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index] || '',
     tabUpcoming: 'Upcoming',
     openUpcoming: 'See everything',
-    openBrowse: 'Search a show',
+    openSettings: 'Settings',
     sectionAccount: 'Account',
     sectionPreferences: 'Preferences',
     settings: 'Settings',
@@ -262,7 +262,7 @@ const STRINGS = {
       ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][index] || '',
     tabUpcoming: 'Próximos',
     openUpcoming: 'Ver todo',
-    openBrowse: 'Buscar una serie',
+    openSettings: 'Ajustes',
     sectionAccount: 'Cuenta',
     sectionPreferences: 'Preferencias',
     settings: 'Ajustes',
@@ -3070,8 +3070,9 @@ function PopoverBody({ onClose }) {
       jsx(OriginLine, {}),
       jsx(UpcomingPanel, { compact: true }),
       jsx(Separator, {}),
-      // Two named doors out of here, so the surface that has the room is one
-      // click away instead of hidden behind an icon.
+      // Two named doors out of here: the full feed, and the one place every
+      // setting lives. Search stays in the workspace's Catalog tab (and in the
+      // palette) instead of being squeezed into a status-bar menu.
       jsxs('div', {
         className: 'flex items-center gap-2',
         children: [
@@ -3093,9 +3094,9 @@ function PopoverBody({ onClose }) {
             onClick: () => {
               haptic('tap')
               onClose()
-              openWorkspaceOrSay('browse')
+              openWorkspaceOrSay('settings')
             },
-            children: t('openBrowse')
+            children: t('openSettings')
           })
         ]
       })

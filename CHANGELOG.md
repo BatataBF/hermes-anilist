@@ -10,6 +10,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Changed
 
+- **The popover's second door goes to Settings.** *Search a show* sent the reader out of the feed and
+  then hunting for a search box; the button opens Settings now, where every preference lives. Search
+  stays in the workspace's Catalog tab and in the command palette.
+
 ### Fixed
 
 ## [0.7.0] - 2026-09-17

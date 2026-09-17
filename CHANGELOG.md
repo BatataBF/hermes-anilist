@@ -67,6 +67,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   losing the scroll position and the show it was drilled into. Re-calling `host.openWorkspace` with
   the same id fronts the existing tab in place (the SDK's own contract), so the close/reopen dance
   and its stale-disposer guard are gone.
+- **The popover is as tall as its rows.** The compact list carried a fixed 20rem height — what the
+  kit's `ScrollArea` needs — so two episodes left most of the menu empty. It is a capped scroller now:
+  it grows with the list and scrolls past 20rem, no measurement and no magic row height. Its two
+  footer doors (*See everything* / *Search a show*) also share one style, instead of a bordered button
+  sitting beside a plain label.
 - **Handler copy speaks the active locale.** The chip's fallback notice, the refresh toast and the
   three palette labels were hardcoded English (`STRINGS.en.…`): they go through `ctx.i18n.t` now, so a
   Spanish install says *AniList actualizado* and ⌘K reads *AniList: Ajustes*.

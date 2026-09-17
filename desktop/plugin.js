@@ -2359,6 +2359,34 @@ function UpcomingPanel({ compact = true }) {
         })
   }
 
+  // What the list draws, computed once: the workspace container needs a definite
+  // height, the popover one sizes to its content — both render the same rows.
+  const rows =
+    filter === 'today'
+      ? items.map((item) => airingRow(item, t, tracked))
+      : groupByDay(items).map((group) =>
+          jsxs(
+            'div',
+            {
+              className: 'flex flex-col',
+              children: [
+                jsxs('div', {
+                  className: 'flex items-center gap-2 pt-1',
+                  children: [
+                    jsx('div', {
+                      className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+                      children: dayLabel(group.items[0].airingAt, t)
+                    }),
+                    jsx(Separator, { className: 'flex-1' })
+                  ]
+                }),
+                ...group.items.map((item) => airingRow(item, t, tracked))
+              ]
+            },
+            group.key
+          )
+        )
+
   return jsxs('div', {
     className: 'flex min-h-0 flex-col gap-1',
     children: [
@@ -2407,39 +2435,20 @@ function UpcomingPanel({ compact = true }) {
         ? jsx(EmptyState, {
             title: filter === 'today' ? t('emptyToday') : filter === 'list' ? t('emptyList') : t('empty')
           })
-        : jsx(ScrollArea, {
-            className: compact ? 'h-80' : 'flex-1',
-            style: compact ? undefined : { minHeight: 0 },
-            children: jsxs('div', {
-              className: 'flex flex-col',
-              children:
-                filter === 'today'
-                  ? items.map((item) => airingRow(item, t, tracked))
-                  : groupByDay(items).map((group) =>
-                      jsxs(
-                        'div',
-                        {
-                          className: 'flex flex-col',
-                          children: [
-                            jsxs('div', {
-                              className: 'flex items-center gap-2 pt-1',
-                              children: [
-                                jsx('div', {
-                                  className:
-                                    'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
-                                  children: dayLabel(group.items[0].airingAt, t)
-                                }),
-                                jsx(Separator, { className: 'flex-1' })
-                              ]
-                            }),
-                            ...group.items.map((item) => airingRow(item, t, tracked))
-                          ]
-                        },
-                        group.key
-                      )
-                    )
+        : compact
+          ? jsx('div', {
+              // A definite height is what the kit's ScrollArea needs — and 20rem for
+              // two rows leaves the popover half empty. A plain capped scroller
+              // grows with the list and starts scrolling at the cap: no measurement,
+              // no magic row height. (Both classes are in the compiled CSS.)
+              className: 'max-h-80 overflow-y-auto pr-1',
+              children: jsx('div', { className: 'flex flex-col', children: rows })
             })
-          }),
+          : jsx(ScrollArea, {
+              className: 'flex-1',
+              style: { minHeight: 0 },
+              children: jsx('div', { className: 'flex flex-col', children: rows })
+            }),
       // Only in the multi-day view: "today" would page into tomorrow, where the
       // rows are filtered out again and the click would look broken.
       hasMore && filter !== 'today'
@@ -3048,7 +3057,7 @@ function PopoverBody({ onClose }) {
           }),
           jsx(Button, {
             type: 'button',
-            variant: 'ghost',
+            variant: 'outline',
             size: 'sm',
             onClick: () => {
               haptic('tap')

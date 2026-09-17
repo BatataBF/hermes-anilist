@@ -55,6 +55,8 @@ const SOURCE = `plugin:${ID}`
 let rest = null
 let osDoor = null
 let store = null
+/** Resolved in register() from ctx.i18n.t: handlers and palette entries have no hook to translate with. */
+let t = (key) => key
 
 /** Registry connections (id → human label), loaded once at register(). */
 const $registry = atom({})
@@ -71,6 +73,7 @@ const STRINGS = {
     episode: (n) => `EP ${n}`,
     retry: 'Retry',
     refresh: 'Refresh',
+    refreshed: 'AniList refreshed',
     openOnAniList: 'Open on AniList',
     empty: 'Nothing airing in this window.',
     backendMissing: 'AniList backend unavailable',
@@ -86,6 +89,9 @@ const STRINGS = {
     searchPlaceholder: 'Search a title…',
     noResults: 'No titles match that search.',
     chipFallback: 'Open the anilist chip in the status bar and use its tabs.',
+    paletteSeasons: 'AniList: Seasons & search',
+    paletteSettings: 'AniList: Settings',
+    paletteRefresh: 'AniList: Refresh',
     filterToday: 'Today',
     emptyToday: 'Nothing left today — the next episode is another day.',
     filterList: 'My list',
@@ -205,6 +211,7 @@ const STRINGS = {
     episode: (n) => `EP ${n}`,
     retry: 'Reintentar',
     refresh: 'Actualizar',
+    refreshed: 'AniList actualizado',
     openOnAniList: 'Abrir en AniList',
     empty: 'No hay estrenos en esta ventana.',
     backendMissing: 'Backend de AniList no disponible',
@@ -220,6 +227,9 @@ const STRINGS = {
     searchPlaceholder: 'Buscá un título…',
     noResults: 'Ningún título coincide con esa búsqueda.',
     chipFallback: 'Abrí el chip anilist de la barra de estado y usá sus solapas.',
+    paletteSeasons: 'AniList: Temporadas y búsqueda',
+    paletteSettings: 'AniList: Ajustes',
+    paletteRefresh: 'AniList: Actualizar',
     filterToday: 'Hoy',
     emptyToday: 'Hoy no queda nada — el próximo episodio es otro día.',
     filterList: 'Mi lista',
@@ -1105,7 +1115,7 @@ let workspaceClose = null
 function openWorkspaceOrSay(view) {
   if (openAniListWorkspace(view)) return
 
-  host.notify({ kind: 'info', message: 'AniList: ' + STRINGS.en.chipFallback })
+  host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
 }
 
 /** Open the workspace tab. False when this desktop predates the main-area door. */
@@ -3115,6 +3125,7 @@ export default {
     // Storage only exists after register(): re-read so a saved preference wins.
     $settings.set(normalizeSettings(store && store.get ? store.get(SETTINGS_KEY, null) : null))
     ctx.i18n.register(STRINGS)
+    t = ctx.i18n.t
     void refreshConnections()
 
     ctx.registerMany([
@@ -3129,12 +3140,12 @@ export default {
         area: PALETTE_AREA,
         data: {
           id: 'anilist.seasons',
-          label: 'AniList: Seasons & search',
+          label: t('paletteSeasons'),
           keywords: ['anime', 'anilist', 'season', 'search', 'browse', 'temporadas'],
           run: () => {
             if (openAniListWorkspace('browse')) return
             // No main-area door on this desktop: point at the surface that has one.
-            host.notify({ kind: 'info', message: 'AniList: ' + STRINGS.en.chipFallback })
+            host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
           }
         }
       },
@@ -3143,11 +3154,11 @@ export default {
         area: PALETTE_AREA,
         data: {
           id: 'anilist.settings',
-          label: 'AniList: Settings',
+          label: t('paletteSettings'),
           keywords: ['anime', 'anilist', 'settings', 'preferences', 'ajustes', 'configuracion'],
           run: () => {
             if (openAniListWorkspace('settings')) return
-            host.notify({ kind: 'info', message: 'AniList: ' + STRINGS.en.chipFallback })
+            host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
           }
         }
       },
@@ -3156,11 +3167,11 @@ export default {
         area: PALETTE_AREA,
         data: {
           id: 'anilist.refresh',
-          label: 'AniList: Refresh',
+          label: t('paletteRefresh'),
           keywords: ['anime', 'anilist', 'refresh'],
           run: () => {
             void queryClient.invalidateQueries({ queryKey: [SOURCE] })
-            host.notify({ kind: 'info', message: 'AniList refreshed' })
+            host.notify({ kind: 'info', message: t('refreshed') })
           }
         }
       }

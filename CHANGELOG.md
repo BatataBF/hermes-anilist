@@ -62,6 +62,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   process keeps a single pooled client now (rebuilt when closed, five fewer handshakes on a dense
   window) and sends `User-Agent: hermes-anilist/…` — AniList answered 403 to an anonymous agent
   string when the digest ran, and it asks clients to identify themselves.
+- **Handler copy speaks the active locale.** The chip's fallback notice, the refresh toast and the
+  three palette labels were hardcoded English (`STRINGS.en.…`): they go through `ctx.i18n.t` now, so a
+  Spanish install says *AniList actualizado* and ⌘K reads *AniList: Ajustes*.
+  `tools/i18n_audit.mjs` keeps both locales honest — 117 keys, none missing, none skewed — with its
+  scan bounded to the `STRINGS` literal (the naive version picked up `queryKey:`/`className:` from the
+  code below the last locale and read them as skew).
 - **The desktop half is under test.** `tools/test_plugin_helpers.mjs` lifts the pure helpers out of
   `desktop/plugin.js` by name — the app loads that file whole, uncompiled — and asserts the decisions
   that used to be eyeballed: countdown buckets, day grouping, the feed filters, the merge dedupe, the

@@ -889,9 +889,19 @@ function MediaRow({ entry, item, onToggle, t, watched }) {
   return jsxs('div', {
     className:
       'group flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-(--chrome-action-hover)',
+    // Reachable without a pointer: same door, same gesture (Enter / Space).
+    role: 'button',
+    tabIndex: 0,
     onClick: () => {
       haptic('selection')
       openDetail(item.id)
+    },
+    onKeyDown: (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        haptic('selection')
+        openDetail(item.id)
+      }
     },
     children: [
       covers
@@ -1103,7 +1113,14 @@ function AniListWorkspace() {
           ? jsx(BrowsePanel, {})
           : view === 'detail'
             ? jsx(DetailPanel, { compact: false })
-            : jsx(SettingsPanel, {})
+            : jsx(ScrollArea, {
+                // Settings is a long form and the workspace is a `flex h-full
+                // min-h-0 flex-col`: without this container the last rows clip with
+                // no way to reach them. Same pattern the other three panels use.
+                className: 'flex-1',
+                style: { minHeight: 0 },
+                children: jsx(SettingsPanel, {})
+              })
     ]
   })
 }
@@ -2936,9 +2953,18 @@ function AiringRow({ entry, item, onToggle, t, watched }) {
       'group flex cursor-pointer items-center justify-between gap-2 rounded px-1 py-1 hover:bg-(--chrome-action-hover)',
     // The whole row is the door to the detail. Aiming at the text of a truncated
     // title is a small game nobody should have to play.
+    role: 'button',
+    tabIndex: 0,
     onClick: () => {
       haptic('selection')
       openDetail(item.id)
+    },
+    onKeyDown: (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        haptic('selection')
+        openDetail(item.id)
+      }
     },
     children: [
       covers && item.cover

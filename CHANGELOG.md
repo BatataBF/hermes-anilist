@@ -80,6 +80,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Fixed
 
+- **Settings clips nothing: the whole pane scrolls.** The workspace rendered it unwrapped while the
+  other three panels sit inside a `ScrollArea` (`flex-1` + `minHeight: 0` against the bounded column),
+  so a short window left *Filter at startup*, *Cover art* and the closing note cut off with no way to
+  reach them.
+- **Rows answer to the keyboard.** The airing and browse rows were click-only `div`s — opening a show
+  is reachable now with Tab, Enter and Space (the row's own buttons keep their own focus).
 - **The daily digest was listed as an episode alert.** `isAlert` matched the shared `[anilist` prefix
   and the digest is named `[anilist:digest] …`, so Settings showed it twice: a row under *Alerts* with
   Pause/Remove control, plus its own section. The alert predicate now excludes it, and the list the

@@ -32,6 +32,11 @@ import {
   PopoverTrigger,
   ScrollArea,
   SearchField,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   SegmentedControl,
   Separator,
   Skeleton,
@@ -162,8 +167,9 @@ const STRINGS = {
     alertDestination: 'Run on',
     destinationLocal: 'This device',
     alertDeliveryLabel: 'Notify via',
-    deliverLocal: 'in the app',
+    deliverLocal: 'In the app',
     settingAlertRoute: 'Default destination',
+    settingAlertRouteHint: 'New alerts run here unless a show says otherwise.',
     alertsHostUnreachable: (host) => `Could not reach ${host}.`,
     alertRunFailed: 'last run failed',
     alertBlocked: 'blocked by host config',
@@ -300,8 +306,9 @@ const STRINGS = {
     alertDestination: 'Dónde',
     destinationLocal: 'Este equipo',
     alertDeliveryLabel: 'Avisarme por',
-    deliverLocal: 'en la app',
+    deliverLocal: 'En la app',
     settingAlertRoute: 'Destino por defecto',
+    settingAlertRouteHint: 'Las alertas nuevas corren acá salvo que una serie diga otra cosa.',
     alertsHostUnreachable: (host) => `No pude consultar ${host}.`,
     alertRunFailed: 'la última corrida falló',
     alertBlocked: 'bloqueado por la config del host',
@@ -1446,6 +1453,32 @@ function alertRouteLabel(route, job, t) {
   return channel ? `${where} · ${DELIVERY_NAMES[channel] || channel}` : where
 }
 
+/**
+ * A destination picker that scales: the registry can expose any number of
+ * (connection, profile) routes, and a segmented track stops reading past three.
+ * Radix renders a blank trigger when `value` matches no item (the SDK's own trap),
+ * so a remembered route that disappeared falls back to the first real one here.
+ */
+function DestinationSelect({ onChange, routes, t, value }) {
+  const active = routes.some((route) => routeId(route) === value) ? value : routeId(routes[0])
+
+  return jsxs(Select, {
+    onValueChange: (next) => {
+      haptic('selection')
+      onChange(next)
+    },
+    value: active,
+    children: [
+      jsx(SelectTrigger, { className: 'min-w-56', children: jsx(SelectValue, {}) }),
+      jsx(SelectContent, {
+        children: routes.map((route) =>
+          jsx(SelectItem, { value: routeId(route), children: alertDestinationLabel(route, t) }, routeId(route))
+        )
+      })
+    ]
+  })
+}
+
 // ─── daily digest ───────────────────────────────────────────────────────────
 
 function isDigest(job) {
@@ -1565,16 +1598,13 @@ function DigestPanel() {
                   value: String(settings.digestHour)
                 })
               }),
-              routes.length > 1
+              routes.length > 0
                 ? jsx(SettingsRow, {
                     label: t('alertDestination'),
-                    children: jsx(SegmentedControl, {
-                      onChange: (next) => {
-                        haptic('selection')
-                        // Remember it: the next job opens on this destination.
-                        saveSettings({ alertRoute: next })
-                      },
-                      options: routes.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
+                    children: jsx(DestinationSelect, {
+                      onChange: (next) => saveSettings({ alertRoute: next }),
+                      routes,
+                      t,
                       value: routeId(active)
                     })
                   })
@@ -1706,13 +1736,10 @@ function AlertControl({ show, t }) {
                   className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
                   children: t('alertDestination')
                 }),
-                jsx(SegmentedControl, {
-                  onChange: (next) => {
-                    haptic('selection')
-                    // Remember it: the next alert opens on this destination.
-                    saveSettings({ alertRoute: next })
-                  },
-                  options: routes.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
+                jsx(DestinationSelect, {
+                  onChange: (next) => saveSettings({ alertRoute: next }),
+                  routes,
+                  t,
                   value: routeId(active)
                 })
               ]
@@ -2187,14 +2214,18 @@ function SettingsPanel() {
       // choosing a host and a channel on every alert.
       jsx(SettingsRow, {
         label: t('settingAlertRoute'),
-        children: jsx(SegmentedControl, {
-          onChange: (next) => {
-            haptic('selection')
-            saveSettings({ alertRoute: next })
-          },
-          options: destinations.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
-          value: routeId(preferredRoute(destinations, settings.alertRoute, owned[0] && routeId(owned[0].route)))
-        })
+        children: destinations.length
+          ? jsx(DestinationSelect, {
+              onChange: (next) => saveSettings({ alertRoute: next }),
+              routes: destinations,
+              t,
+              value: routeId(preferredRoute(destinations, settings.alertRoute, owned[0] && routeId(owned[0].route)))
+            })
+          : jsx(Skeleton, { className: 'h-7 w-56' })
+      }),
+      jsx('div', {
+        className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
+        children: t('settingAlertRouteHint')
       }),
       jsx(Separator, {}),
       jsx(SectionTitle, { children: t('sectionPreferences') }),

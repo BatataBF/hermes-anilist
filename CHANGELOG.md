@@ -67,6 +67,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   losing the scroll position and the show it was drilled into. Re-calling `host.openWorkspace` with
   the same id fronts the existing tab in place (the SDK's own contract), so the close/reopen dance
   and its stale-disposer guard are gone.
+- **Destinations are a select, and the digest says where it runs.** *Run on* (inside Daily digest) and
+  *Default destination* were the same four-option segmented track shown twice on one screen; both are
+  one-line selects now — the registry can expose any number of connections and profiles, and a
+  segmented track stops reading past three. The default row carries a line saying what it decides, and
+  *In the app* is capitalized like its neighbours.
 - **The popover is as tall as its rows.** The compact list carried a fixed 20rem height — what the
   kit's `ScrollArea` needs — so two episodes left most of the menu empty. It is a capped scroller now:
   it grows with the list and scrolls past 20rem, no measurement and no magic row height. Its two

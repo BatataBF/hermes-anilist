@@ -333,6 +333,25 @@ def test_airing_rejects_a_negative_cursor(api):
     assert api.calls == []                                       # rejected before spending budget
 
 
+def test_airing_stops_stitching_when_the_budget_is_low(monkeypatch):
+    """The floor protects the host's shared 30/minute: a stitched window must not
+    spend the last of it on a continuation page."""
+    calls = []
+    now = int(time.time())
+
+    async def fake_graphql(query, variables):
+        calls.append(variables)
+        return _airing_page([now + 3600 * (i + 1) for i in range(50)], True)
+
+    client = _client(monkeypatch, fake_graphql, calls)
+    plugin_api._rate["remaining"] = plugin_api.RATE_FLOOR - 1
+    body = client.get(f"{PREFIX}/airing", params={"days": 7}).json()
+
+    assert len(calls) == 1                     # the first page is what we pay for…
+    assert len(body["items"]) == 50            # …and it is served
+    assert body["hasNextPage"] is True         # there IS more; we simply did not spend it
+
+
 # ─── one show: the detail pane's data ────────────────────────────────────────
 
 DETAIL_PAYLOAD = {

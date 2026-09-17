@@ -481,6 +481,14 @@ async def _airing_window(days: int, per_page: int, after: Optional[int]) -> Dict
     has_next = False
 
     for _ in range(MAX_AIRING_PAGES):
+        # The floor protects the host's shared 30/minute, and that budget is spent
+        # by every other window and rule too. `entries` non-empty means the first
+        # page already succeeded: stop stitching instead of spending the last of
+        # the budget on a continuation page. `has_next` still holds the previous
+        # page's answer, so the feed keeps its "there is more" footer.
+        if entries and _rate_exhausted():
+            break
+
         data = await _graphql(_AIRING_QUERY, {"from": cursor, "to": end, "perPage": per_page})
         page = data.get("Page") or {}
         rows = [

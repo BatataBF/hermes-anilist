@@ -56,6 +56,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Fixed
 
+- **The stitched airing window ignored the rate floor.** `_cached` checks the budget before the
+  first request, but a 7-day window is up to `MAX_AIRING_PAGES` cursor pages — a dense season could
+  spend the last of the host's shared 30/minute on a continuation page. The loop now stops between
+  pages when the floor trips, keeps what the first page returned, and leaves `hasNextPage` true so
+  *Ver más* can continue later.
 - **The delivery picker crashed the workspace.** Its value read a bare `alertDelivery` that the
   preference refactor had already moved onto `settings` — the render threw
   `ReferenceError: alertDelivery is not defined`, the app's error boundary caught it, and the pane

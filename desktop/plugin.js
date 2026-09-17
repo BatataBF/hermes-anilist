@@ -2679,6 +2679,26 @@ function airingWhen(airingAt, t) {
 const SYNOPSIS_CLAMP = '6.5rem'
 
 /**
+ * The clip, plus the fade that says "there is more" once the text runs past it.
+ *
+ * A mask rather than a painted gradient: it fades the prose into whatever surface
+ * sits behind it, so the same rule reads correctly in a light and a dark theme
+ * instead of hardcoding the pane's colour. A synopsis that fits gets no fade and
+ * no button — nothing may imply text that does not exist.
+ */
+function synopsisStyle(open, clipped) {
+  if (open) return undefined
+
+  const clip = { maxHeight: SYNOPSIS_CLAMP, overflow: 'hidden' }
+
+  if (!clipped) return clip
+
+  const fade = 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 60%, rgba(0, 0, 0, 0) 100%)'
+
+  return { ...clip, WebkitMaskImage: fade, maskImage: fade }
+}
+
+/**
  * The synopsis, in the one gap this page has: beside the cover art, under the
  * metadata. Prose belongs where the room already is, not appended to the bottom
  * of the page where it would push the schedule further down.
@@ -2714,7 +2734,7 @@ function Synopsis({ t, text }) {
       jsx('div', {
         ref: box,
         className: 'whitespace-pre-line break-words text-xs text-(--ui-text-secondary)',
-        style: open ? undefined : { maxHeight: SYNOPSIS_CLAMP, overflow: 'hidden' },
+        style: synopsisStyle(open, clipped),
         children: text
       }),
       clipped || open

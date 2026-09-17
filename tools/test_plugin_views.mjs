@@ -82,7 +82,7 @@ const grabConst = (name) => {
 
 const FUNCTIONS = [
   'countdown', 'dayKey', 'dayLabel', 'airedDate', 'clockTime', 'episodeWhen', 'monthHeading',
-  'nextAiring', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'airingWhen',
+  'nextAiring', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'airingWhen', 'synopsisStyle',
   'Synopsis', 'DayCell', 'EpisodeCalendar', 'EpisodeTable', 'StatusSelect'
 ]
 const CONSTS = ['STRINGS', 'SYNOPSIS_CLAMP']

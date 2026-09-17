@@ -45,12 +45,12 @@ const grabConst = (name) => {
   return lines.slice(start, end + 1).join('\n')
 }
 
-const CONSTS = ['STRINGS', 'DEFAULT_SETTINGS', 'ALERT_PREFIX', 'ALERT_RE', 'DIGEST_PREFIX', 'DIGEST_STATUSES', 'DELIVERY_NAMES']
+const CONSTS = ['STRINGS', 'DEFAULT_SETTINGS', 'ALERT_PREFIX', 'ALERT_RE', 'DIGEST_PREFIX', 'DIGEST_STATUSES', 'DELIVERY_NAMES', 'SYNOPSIS_CLAMP']
 const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
   'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
-  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate',
+  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle',
   'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring'
 ]
 
@@ -294,6 +294,30 @@ test('monthHeading spells the month out and pins the year', () => {
 test('airingWhen names the weekday, the date and the hour', () => {
   assert.equal(helpers.airingWhen(wall(2026, 8, 18), t), 'Fri 18 Sep · 10:30')
   assert.equal(helpers.airingWhen(wall(2026, 8, 18), makeT('es')), 'Vie 18 sep · 10:30')
+})
+
+// ─── the synopsis beside the cover ──────────────────────────────────────────
+
+test('a synopsis that fits is clipped and nothing more', () => {
+  assert.deepEqual(helpers.synopsisStyle(false, false), {
+    maxHeight: helpers.SYNOPSIS_CLAMP,
+    overflow: 'hidden'
+  })
+})
+
+test('a synopsis that runs past the clip fades out to say so', () => {
+  const faded = helpers.synopsisStyle(false, true)
+
+  assert.equal(faded.maxHeight, helpers.SYNOPSIS_CLAMP)
+  assert.equal(faded.overflow, 'hidden')
+  assert.match(faded.maskImage, /^linear-gradient\(to bottom, rgba\(0, 0, 0, 1\) 60%/)
+  // The prefixed copy rides along for older Chromium in the app's Electron.
+  assert.equal(faded.WebkitMaskImage, faded.maskImage)
+})
+
+test('an open synopsis is neither clipped nor faded', () => {
+  assert.equal(helpers.synopsisStyle(true, true), undefined)
+  assert.equal(helpers.synopsisStyle(true, false), undefined)
 })
 
 if (failed) {

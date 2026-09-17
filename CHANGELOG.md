@@ -24,7 +24,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   box running its own gateway with a messaging channel configured is where the job has to live. The
   Alerts list asks every destination it can reach, names each row's host, and routes pause/resume and
   remove back to the gateway that owns the job — a host it cannot reach is reported as such, never as
-  "no alerts". *(The daily digest is the other half of L4 and is not built yet.)*
+  "no alerts". **Delivery target:** an alert records where its notification comes out
+  (`local`/`telegram`/`discord`, the CLI's own vocabulary), offered as a named choice whenever the
+  destination is not this device and remembered between alerts — the RPC default of `local` only
+  surfaces the run inside whichever app owns that store. A run that failed, or was refused by the
+  scheduler's pre-dispatch validation, says so on its row. *(The daily digest is the other half of L4
+  and is not built yet.)*
 
 ## [0.6.0] - 2026-09-17
 

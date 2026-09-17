@@ -62,6 +62,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   process keeps a single pooled client now (rebuilt when closed, five fewer handshakes on a dense
   window) and sends `User-Agent: hermes-anilist/…` — AniList answered 403 to an anonymous agent
   string when the digest ran, and it asks clients to identify themselves.
+- **Opening the workspace refreshes the tab instead of replacing it.** Every *See everything* /
+  *Search a show* / ⌘K entry used to close the tab the plugin had opened and open a fresh one,
+  losing the scroll position and the show it was drilled into. Re-calling `host.openWorkspace` with
+  the same id fronts the existing tab in place (the SDK's own contract), so the close/reopen dance
+  and its stale-disposer guard are gone.
 - **Handler copy speaks the active locale.** The chip's fallback notice, the refresh toast and the
   three palette labels were hardcoded English (`STRINGS.en.…`): they go through `ctx.i18n.t` now, so a
   Spanish install says *AniList actualizado* and ⌘K reads *AniList: Ajustes*.

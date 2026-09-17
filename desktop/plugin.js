@@ -1108,9 +1108,6 @@ function AniListWorkspace() {
   })
 }
 
-/** Bound to the workspace tab this plugin opened, so a second open replaces it. */
-let workspaceClose = null
-
 /** Open the workspace, or say why not — the palette entries' own fallback. */
 function openWorkspaceOrSay(view) {
   if (openAniListWorkspace(view)) return
@@ -1118,26 +1115,20 @@ function openWorkspaceOrSay(view) {
   host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
 }
 
-/** Open the workspace tab. False when this desktop predates the main-area door. */
+/**
+ * Open the workspace tab — or bring the one already open to the front.
+ *
+ * Re-calling `host.openWorkspace` with the same id refreshes `render` in place and
+ * fronts the existing tab (the SDK's own contract), so there is no close/reopen
+ * dance: a tab the user already has open keeps its scroll position and the show it
+ * was drilled into. False when this desktop predates the main-area door.
+ */
 function openAniListWorkspace(view = 'browse') {
   if (typeof host.openWorkspace !== 'function') return false
 
   $workspaceView.set(view)
-
-  if (workspaceClose) {
-    try {
-      workspaceClose()
-    } catch {
-      /* a tab the user already closed must not block the reopen */
-    }
-    workspaceClose = null
-  }
-
-  workspaceClose = host.openWorkspace(WORKSPACE_ID, {
+  host.openWorkspace(WORKSPACE_ID, {
     minWidth: '24rem',
-    onClose: () => {
-      workspaceClose = null
-    },
     render: () => jsx(AniListWorkspace, {}),
     title: 'AniList'
   })

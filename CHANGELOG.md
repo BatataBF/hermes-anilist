@@ -19,6 +19,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Changed
 
+- **The status-bar chip follows *your* list, not the whole schedule.** The episode it shows is the
+  earliest one among the shows you track — your AniList list when you are signed in, this device's own
+  list when you are not, one rule either way, and the minute-by-minute refresh it already had rolls it
+  over as each episode goes out. When nothing of yours airs in the window it says *nothing of yours
+  airs soon* instead of quietly showing someone else's show (the tooltip spells out the window), and
+  when nothing is tracked at all it says that, naming both ways to fill the list.
 - **The show page leads with what it is for.** The next episode, its day and hour, and the alert
   action share a card at the top now, instead of being scattered between the metadata and a wall of
   text.

@@ -89,6 +89,11 @@ const STRINGS = {
     unreachable: 'AniList is unreachable',
     localDevice: 'This device',
     chipLabel: 'AniList — upcoming episodes',
+    chipNothingAiring: 'nothing of yours airs soon',
+    chipNothingTracked: 'no shows tracked',
+    chipNothingAiringHint: (days) => `Nothing in your list airs in the next ${days} days.`,
+    chipNothingTrackedHint:
+      'Track a show — or sign in to AniList to use your AniList list — and its next episode shows up here.',
     seasons: 'Catalog',
     seasonName: (season) =>
       ({ WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall' })[season] || season,
@@ -254,6 +259,11 @@ const STRINGS = {
     unreachable: 'AniList no responde',
     localDevice: 'Este equipo',
     chipLabel: 'AniList — próximos episodios',
+    chipNothingAiring: 'nada tuyo emite pronto',
+    chipNothingTracked: 'sin series seguidas',
+    chipNothingAiringHint: (days) => `Nada de tu lista emite en los próximos ${days} días.`,
+    chipNothingTrackedHint:
+      'Seguí una serie — o iniciá sesión en AniList para usar tu lista de AniList — y su próximo episodio aparece acá.',
     seasons: 'Catálogo',
     seasonName: (season) =>
       ({ WINTER: 'Invierno', SPRING: 'Primavera', SUMMER: 'Verano', FALL: 'Otoño' })[season] || season,
@@ -417,6 +427,19 @@ function countdown(airingAt, t) {
 /** The clock face the chip wears: on air within the hour, or something still to wait for. */
 function chipIcon(airingAt, now = Date.now() / 1000) {
   return airingAt && airingAt - now <= 3600 ? 'broadcast' : 'clock'
+}
+
+/**
+ * The one show the chip is about: the next episode among the shows this reader
+ * tracks. The whole schedule is the popover's business — a chip that silently
+ * changes whose show it means is a chip nobody can trust.
+ *
+ * Signed in, that list is the AniList account's; signed out, it is this device's
+ * own list, which tracks the same way. One rule either way, so the chip does not
+ * mean something different depending on a login.
+ */
+function chipNext(items, ids) {
+  return (items || []).filter((item) => ids && ids.has(String(item.id)))[0] || null
 }
 
 /** 404 from ctx.rest means the Python half is not mounted on this agent. */
@@ -3641,15 +3664,25 @@ function PopoverBody({ onClose }) {
 function NextChip() {
   const t = usePluginI18n(ID)
   const airing = useAiring()
-  const { titleLanguage } = useValue($settings)
+  const tracked = useTracked()
+  const { titleLanguage, windowDays } = useValue($settings)
   // Controlled so the footer's buttons can close this menu on their way out.
   const [open, setOpen] = useState(false)
   const items = (airing.data && airing.data.items) || []
-  const next = items[0]
+  // The chip answers one question: what airs next among the shows this reader
+  // tracks. `useAiring` already refetches every minute, so it rolls over to the
+  // following episode on its own as each one goes out.
+  const next = chipNext(items, tracked.ids)
   // A bare countdown says how long, not what for.
   const nextTitle = next ? titleOf(next, titleLanguage) : ''
   // Within the hour the chip stops being a postcard and starts being a notice.
   const imminent = !!next && next.airingAt - Date.now() / 1000 <= 3600
+  // While either list is still arriving the chip claims nothing: "nothing airs"
+  // and "not loaded yet" must not look the same.
+  const settling = !next && (airing.isLoading || tracked.isLoading)
+  const empty = !next && !settling
+  const emptyLabel = tracked.ids.size ? t('chipNothingAiring') : t('chipNothingTracked')
+  const emptyHint = tracked.ids.size ? t('chipNothingAiringHint', windowDays) : t('chipNothingTrackedHint')
 
   return jsx(Popover, {
     open,
@@ -3659,7 +3692,7 @@ function NextChip() {
         asChild: true,
         children: jsx('button', {
           type: 'button',
-          title: next ? `${nextTitle} — ${countdown(next.airingAt, t)}` : t('chipLabel'),
+          title: next ? `${nextTitle} — ${countdown(next.airingAt, t)}` : empty ? emptyHint : t('chipLabel'),
           className: cn(
             'inline-flex h-full items-center gap-1.5 px-1.5 text-[0.6875rem] transition-colors',
             'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
@@ -3685,7 +3718,9 @@ function NextChip() {
                   className: cn('shrink-0 font-medium tabular-nums', imminent && 'text-(--ui-text-primary)'),
                   children: countdown(next.airingAt, t)
                 })
-              : null
+              : empty
+                ? jsx('span', { className: 'truncate opacity-60', children: emptyLabel })
+                : null
           ]
         })
       }),

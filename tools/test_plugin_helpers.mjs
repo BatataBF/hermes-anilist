@@ -50,7 +50,7 @@ const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
   'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
-  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon',
+  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon', 'chipNext',
   'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring'
 ]
 
@@ -330,6 +330,17 @@ test('the chip wears a broadcast mark once its episode is within the hour', () =
   assert.equal(helpers.chipIcon(now - 60, now), 'broadcast', 'already airing reads the same way')
   assert.equal(helpers.chipIcon(null, now), 'clock', 'nothing scheduled is never "on air"')
   assert.equal(helpers.chipIcon(undefined, now), 'clock')
+})
+
+test('the chip is about the reader\'s own list, not the whole schedule', () => {
+  const items = [{ id: 1, airingAt: 100 }, { id: 2, airingAt: 200 }, { id: 3, airingAt: 300 }]
+
+  assert.equal(helpers.chipNext(items, new Set(['2', '3'])).id, 2, 'the next one among mine')
+  assert.equal(helpers.chipNext(items, new Set(['3'])).id, 3, 'the earliest of mine, not the first overall')
+  assert.equal(helpers.chipNext(items, new Set(['9'])), null, 'nothing of mine in the window')
+  assert.equal(helpers.chipNext(items, new Set()), null, 'nothing tracked, nothing claimed')
+  assert.equal(helpers.chipNext([], new Set(['1'])), null)
+  assert.equal(helpers.chipNext(null, new Set(['1'])), null)
 })
 
 if (failed) {

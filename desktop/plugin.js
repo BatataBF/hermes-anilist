@@ -1364,17 +1364,24 @@ function holdAlert(source, job, paused, route) {
 }
 
 /**
- * The destination a new job should use: the one chosen last, or the active
- * connection when that route is gone.
+ * The destination a new job should use: the one chosen last, then the host where
+ * this plugin already has jobs, then the active connection.
  *
  * Remembering this (and the channel) is the difference between picking a host and
- * a delivery target on every single alert and picking them once — a reader whose
- * notifications live on one box should not have to say so again every time.
+ * a delivery target on every single alert and never thinking about it again — a
+ * reader whose notifications live on one box should not have to say so twice, and
+ * if jobs already exist somewhere, that is where they belong.
  */
-function preferredRoute(routes, remembered) {
+function preferredRoute(routes, remembered, fallback) {
   const list = routes || []
+  const wanted = [remembered, fallback]
 
-  return list.find((route) => routeId(route) === remembered) || list[0] || null
+  for (const id of wanted) {
+    const found = list.find((route) => routeId(route) === id)
+    if (found) return found
+  }
+
+  return list[0] || null
 }
 
 /** What a destination is called: the reader's own device, or the connection serving it. */
@@ -1455,8 +1462,9 @@ function DigestPanel() {
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const ids = digestIds(tracked.entries)
-  const armed = ((alerts.data && alerts.data.items) || []).find((item) => isDigest(item.job)) || null
-  const active = preferredRoute(routes, settings.alertRoute)
+  const existing = (alerts.data && alerts.data.items) || []
+  const armed = existing.find((item) => isDigest(item.job)) || null
+  const active = preferredRoute(routes, settings.alertRoute, existing[0] && routeId(existing[0].route))
   const remote = !!active && active.mode !== 'local'
   const deliver = remote ? settings.alertDelivery : 'local'
   const run = (work) => {
@@ -1588,7 +1596,8 @@ function AlertControl({ show, t }) {
   if (!episode || !show.airingAt) return null
 
   const armed = alertFor(alerts.data, show.id, episode)
-  const active = preferredRoute(routes, settings.alertRoute)
+  const existing = (alerts.data && alerts.data.items) || []
+  const active = preferredRoute(routes, settings.alertRoute, existing[0] && routeId(existing[0].route))
   // This device has exactly one sensible answer: the run shows up in the app that
   // is already open. Another host is the case where the channel matters.
   const remote = !!active && active.mode !== 'local'
@@ -2113,6 +2122,8 @@ function SettingsPanel() {
   const t = usePluginI18n(ID)
   const settings = useValue($settings)
   const destinations = useDestinations().data || []
+  const alertJobs = useAlerts().data
+  const alerts = (alertJobs && alertJobs.items) || []
   const [filter, setFilter] = useAiringFilter()
 
   return jsxs('div', {
@@ -2139,7 +2150,7 @@ function SettingsPanel() {
             saveSettings({ alertRoute: next })
           },
           options: destinations.map((route) => ({ id: routeId(route), label: alertDestinationLabel(route, t) })),
-          value: routeId(preferredRoute(destinations, settings.alertRoute))
+          value: routeId(preferredRoute(destinations, settings.alertRoute, alerts[0] && routeId(alerts[0].route)))
         })
       }),
       jsx(Separator, {}),

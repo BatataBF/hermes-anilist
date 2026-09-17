@@ -29,8 +29,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   destination is not this device and remembered between alerts — the RPC default of `local` only
   surfaces the run inside whichever app owns that store. **Set once, not per alert:** the destination
   and the channel are preferences (Settings ▸ *Default destination*), so every alert after the first
-  opens on the host and channel already chosen — a reader whose notifications live on one box should
-  not have to say so again. A run that failed, or was refused by the
+  opens on the host and channel already chosen — and with no preference yet it opens on the host where
+  this plugin already has jobs. A reader whose notifications live on one box should
+  not have to say so twice. A run that failed, or was refused by the
   scheduler's pre-dispatch validation, says so on its row.
 
 - **Daily digest.** One message a day with what airs from the reader's list, armed from Settings: same store,

@@ -151,6 +151,8 @@ const STRINGS = {
     alertsUnavailable: 'Alerts need the Hermes gateway.',
     alertDestination: 'Run on',
     destinationLocal: 'This device',
+    alertDeliveryLabel: 'Notify via',
+    deliverLocal: 'in the app',
     alertsHostUnreachable: (host) => `Could not reach ${host}.`,
     alertRunFailed: 'last run failed',
     alertBlocked: 'blocked by host config',
@@ -264,6 +266,8 @@ const STRINGS = {
     alertsUnavailable: 'Las alertas necesitan el gateway de Hermes.',
     alertDestination: 'Dónde',
     destinationLocal: 'Este equipo',
+    alertDeliveryLabel: 'Avisarme por',
+    deliverLocal: 'en la app',
     alertsHostUnreachable: (host) => `No pude consultar ${host}.`,
     alertRunFailed: 'la última corrida falló',
     alertBlocked: 'bloqueado por la config del host',
@@ -340,7 +344,18 @@ function useSource() {
 const SETTINGS_KEY = 'settings'
 const TITLE_LANGUAGES = ['english', 'romaji', 'native']
 const WINDOW_DAYS = [3, 7, 14]
-const DEFAULT_SETTINGS = { covers: true, defaultFilter: 'week', titleLanguage: 'english', windowDays: 7 }
+// What a notification can come out of, in the CLI's own `--deliver` vocabulary.
+// `local` is the run showing up in the app that owns the store; the rest are the
+// channels a gateway box may have configured.
+const ALERT_DELIVERIES = ['local', 'telegram', 'discord']
+const DELIVERY_NAMES = { telegram: 'Telegram', discord: 'Discord' }
+const DEFAULT_SETTINGS = {
+  covers: true,
+  defaultFilter: 'week',
+  titleLanguage: 'english',
+  windowDays: 7,
+  alertDelivery: 'telegram'
+}
 
 /** Whatever a previous version (or a hand-edited localStorage) left: keep the shape. */
 function normalizeSettings(raw) {
@@ -356,7 +371,10 @@ function normalizeSettings(raw) {
       : DEFAULT_SETTINGS.titleLanguage,
     windowDays: WINDOW_DAYS.includes(Number(stored.windowDays))
       ? Number(stored.windowDays)
-      : DEFAULT_SETTINGS.windowDays
+      : DEFAULT_SETTINGS.windowDays,
+    alertDelivery: ALERT_DELIVERIES.includes(stored.alertDelivery)
+      ? stored.alertDelivery
+      : DEFAULT_SETTINGS.alertDelivery
   }
 }
 
@@ -1277,13 +1295,17 @@ function writeAlert(source, work) {
  * at the moment AniList says the episode airs and then never again. Created on the
  * destination the reader picked, which is what decides where it fires.
  */
-function createAlert(source, t, item, episode, airingAt, route) {
+function createAlert(source, t, item, episode, airingAt, route, deliver) {
   return writeAlert(source, () =>
     cronCall(route, {
       action: 'add',
       name: `${ALERT_PREFIX}:${item.id}:e${episode}] ${item.title} — EP ${episode}`,
       schedule: new Date((airingAt || 0) * 1000).toISOString(),
-      prompt: t('alertPrompt', item.title, episode, `https://anilist.co/anime/${item.id}`)
+      prompt: t('alertPrompt', item.title, episode, `https://anilist.co/anime/${item.id}`),
+      // Where the notification comes out. `local` means the run only surfaces in
+      // whichever app owns that store — right on this device, useless on a box
+      // you chose precisely because it has a channel.
+      deliver
     })
   )
 }
@@ -1304,6 +1326,15 @@ function alertDestinationLabel(route, t) {
   return profile && profile !== 'default' ? `${name} · ${profile}` : name
 }
 
+/** "VPS Zonda · Telegram" — where the job lives, and where it comes out. */
+function alertRouteLabel(route, job, t) {
+  const where = alertDestinationLabel(route, t)
+  const deliver = String((job && job.deliver) || '')
+  const channel = deliver && deliver !== 'local' ? deliver.split(':')[0] : ''
+
+  return channel ? `${where} · ${DELIVERY_NAMES[channel] || channel}` : where
+}
+
 /**
  * The alert for the next episode, on the show's own page — and the host it should
  * run on.
@@ -1318,6 +1349,7 @@ function AlertControl({ show, t }) {
   const source = useSource()
   const alerts = useAlerts()
   const destinations = useDestinations()
+  const { alertDelivery } = useValue($settings)
   const routes = destinations.data || []
   const [chosen, setChosen] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -1328,6 +1360,10 @@ function AlertControl({ show, t }) {
 
   const armed = alertFor(alerts.data, show.id, episode)
   const active = routes.find((route) => routeId(route) === chosen) || routes[0] || null
+  // This device has exactly one sensible answer: the run shows up in the app that
+  // is already open. Another host is the case where the channel matters.
+  const remote = !!active && active.mode !== 'local'
+  const delivery = remote ? alertDelivery : 'local'
   const run = (work) => {
     setBusy(true)
     setFailure(null)
@@ -1368,7 +1404,7 @@ function AlertControl({ show, t }) {
                 disabled: busy || !active,
                 onClick: () => {
                   haptic('tap')
-                  void run(() => createAlert(source, t, show, episode, show.airingAt, active))
+                  void run(() => createAlert(source, t, show, episode, show.airingAt, active, delivery))
                 },
                 children: t('alertAdd', episode)
               })
@@ -1379,7 +1415,7 @@ function AlertControl({ show, t }) {
       armed
         ? jsx('div', {
             className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
-            children: alertDestinationLabel(armed.route, t)
+            children: alertRouteLabel(armed.route, armed.job, t)
           })
         : routes.length > 1
           ? jsxs('div', {
@@ -1400,6 +1436,29 @@ function AlertControl({ show, t }) {
               ]
             })
           : null,
+      // A destination that is not this device exists for its channel: name it.
+      !armed && remote
+        ? jsxs('div', {
+            className: 'flex flex-wrap items-center gap-2',
+            children: [
+              jsx('div', {
+                className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+                children: t('alertDeliveryLabel')
+              }),
+              jsx(SegmentedControl, {
+                onChange: (next) => {
+                  haptic('selection')
+                  saveSettings({ alertDelivery: next })
+                },
+                options: ALERT_DELIVERIES.map((id) => ({
+                  id,
+                  label: id === 'local' ? t('deliverLocal') : DELIVERY_NAMES[id] || id
+                })),
+                value: alertDelivery
+              })
+            ]
+          })
+        : null,
       failure
         ? jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-quaternary)', children: t('alertFailed') })
         : null
@@ -1721,9 +1780,9 @@ function AlertRow({ job, route, t }) {
             className: 'flex items-center gap-1.5 text-[0.6875rem] text-(--ui-text-quaternary)',
             children: [
               jsx('span', { children: failure ? t('alertFailed') : runAtLabel(job.next_run_at, t) }),
-              // Which host holds it decides where it delivers, so it is part of
-              // the row and not a detail buried elsewhere.
-              jsx('span', { className: 'truncate', children: alertDestinationLabel(route, t) }),
+              // Which host holds it, and which channel it comes out of, decide
+              // whether it reaches you at all — so they are part of the row.
+              jsx('span', { className: 'truncate', children: alertRouteLabel(route, job, t) }),
               paused ? jsx(Badge, { variant: 'muted', children: t('alertPaused') }) : null,
               // A job that did not run says so here: the pane is where the alert
               // was armed, so it is where the reason belongs, not only in the

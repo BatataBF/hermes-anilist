@@ -4,106 +4,7 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2026-09-17
-
-### Added
-
-- **A settings view**, reachable from the shared view switcher (Próximos · Temporadas · Ajustes) in
-  both the popover and the workspace tab, and from the palette (`AniList: Settings`). Preferences are
-  client-side and per install (`ctx.storage`), so none of them needs a gateway round trip:
-  **title language** (English / Romaji / Native), **feed window** (3 / 7 / 14 days, which the airing
-  query honors), **filter** (the popover's control and the settings row deliberately write the same
-  value — what you pick in passing is what the next open remembers) and **cover art** on or off.
-- The popover **names its views**: the switcher spells out Próximos, Temporadas and Ajustes instead
-  of hiding them behind a glyph.
-
-### Changed
-
-- `normalize_media_page` and `normalize_airing` now also return `titles: {romaji, english, native}`,
-  with `null` flattened to `""` so callers can fall through. `title` keeps its
-  english → romaji → native preference, so existing callers are unaffected.
-
-## [0.3.0] - 2026-09-17
-
-### Added
-
-- **A window filter on the upcoming list** — `Hoy` / `7 días`, as a `SegmentedControl` beside the
-  section title. The feed is always fetched as a seven-day window and narrowing happens
-  client-side, so flipping the filter back and forth never spends AniList budget. `Hoy` ends at the
-  user's own midnight (not UTC's), and an episode that has just started still counts as today —
-  its row says "airing now".
-
-## [0.2.2] - 2026-09-17
-
-### Fixed
-
-- **The lists scroll.** The kit's `ScrollArea` viewport is `size-full`, so a `max-height` root gave
-  it a percentage height that resolves to `auto`: the rows were clipped at 18rem with no way to
-  reach the rest of the window. Both lists now carry a definite height (`h-80`), and the workspace's
-  takes `flex-1` with `min-height: 0`.
-
-### Changed
-
-- The status-bar popover is 24rem wide instead of the kit's 18rem default: the season track, the
-  year stepper and the search field fit on one line. The width is an inline style, because the
-  compiled Tailwind ships no `w-96` to lean on.
-
-## [0.2.1] - 2026-09-17
-
-### Fixed
-
-- **The status-bar popover no longer dismisses itself when the pointer reaches for it.** Opening
-  the chip's popover and sliding the mouse toward it closed it immediately. Escape and a click
-  outside still close it; a focus change the user never asked for no longer does
-  (`onFocusOutside` is prevented). Every dismissal now logs which event fired, so `desktop.log`
-  names the mechanism instead of leaving it to a guess.
-
-## [0.2.0] - 2026-09-17
-
-### Added
-
-- `GET /search?q=&page=&per_page=` — free-text title search
-  (`Page.media(search:, sort: SEARCH_MATCH)`), returning the same normalized media page as
-  `/trending` and `/season` and sharing their 300 s TTL cache and rate-limit floor. Queries with
-  fewer than two non-space characters are rejected before they spend budget, and the cache key
-  folds case and padding, so `One Piece` and `  one piece ` cost one request, not two.
-- **Season browser + title search (L1).** `host.openWorkspace` opens an `anilist` workspace tab
-  with a season/year selector and a debounced search field over the 24 most popular titles of that
-  season. The status-bar popover gains a seasons button that renders the same panel compact, so the
-  search box exists once and only once, and a desktop without the workspace door falls back to that
-  popover (the palette command points at it rather than failing silently). Season and search pages
-  also cache for 300 s client-side, so flipping seasons re-reads the backend's TTL entry instead of
-  spending new AniList budget.
-
-### Fixed
-
-- **The header now names the gateway the data actually comes from.** It read the registry's
-  `primary` row instead, which is a different question: with an SSH box as primary and a local
-  app-managed backend serving the requests, the popover claimed to be reading from the remote
-  while every byte came from the local backend. Resolve `host.state.connectionId` instead — the
-  app's active source, `local` for an app-managed backend, and the documented `null` treated as
-  local — so the label re-renders on a connection or profile swap rather than freezing at
-  `register()` time.
-- The airing query key now carries the source and profile
-  (`['plugin:hermes-anilist', <connectionId>, <profile>, 'airing']`). Two gateways can both
-  expose a `default` profile; without the source in the key their rows shared one cache entry
-  and overwrote each other.
-
-## [0.1.1] - 2026-09-17
-
-### Changed
-
-- **Desktop surface is now a status-bar popover instead of a docked pane.** Closing the only pane a
-  plugin contributes disables that plugin (core pane lifecycle), so a lone pane could not be
-  dismissed without switching the feature off. The chip unfolds the upcoming-episode list; Escape or
-  a click outside closes it.
-- `manifest_version: 2` removed from `plugin.yaml`. `hermes plugins install` pins its own ceiling at
-  1 (`hermes_cli/plugins_cmd.py`), so a v2 declaration made the plugin **uninstallable from git**
-  while still loadable and catalog-valid. Every v2 field (`config_schema`, `python_dependencies`) is
-  parsed with no version gate, so staying on v1 keeps the full feature set.
-- Each row gains a hover action that opens the show on AniList (`ctx.os.openExternal`).
-
-## [Unreleased]
+## [0.6.0] - 2026-09-17
 
 ### Added
 
@@ -124,9 +25,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   of the plugin already speaks, skips custom lists (they repeat shows already filed under a status),
   and hands back entries watching-first with progress, score, cover and episode count. *My list* —
   the feed filter, the row markers and the detail pane — reads it through one seam, so no surface
-  has to know which store answered. **Read-only**: writing back is the next step, and the UI says
-  so instead of faking a local write behind a button that would look like it worked. Signed out, the
-  route is silent (no request) and the local watchlist answers as before.
+  has to know which store answered. (Writing back landed in the same release — see above — so that
+  list is edited from here rather than shadowed by a local copy.) Signed out, the route is silent (no
+  request) and the local watchlist answers as before.
 - **The sign-in pane** (Settings ▸ *AniList account*), written as three numbered steps: create the app
   (with the exact pin redirect shown selectable), paste its Client ID, then **Get AniList token** —
   which opens the authorize URL with that id already in it — and paste the token. Once AniList
@@ -231,3 +132,102 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   resolves back to the key itself, so `t('dayNames')` handed back the string `"dayNames"` and the
   code indexed *that* (`"dayNames"[6]` → `e`, upper-cased by the header's `uppercase`). The names
   are a function now, with the constraint written next to them.
+
+## [0.4.0] - 2026-09-17
+
+### Added
+
+- **A settings view**, reachable from the shared view switcher (Próximos · Temporadas · Ajustes) in
+  both the popover and the workspace tab, and from the palette (`AniList: Settings`). Preferences are
+  client-side and per install (`ctx.storage`), so none of them needs a gateway round trip:
+  **title language** (English / Romaji / Native), **feed window** (3 / 7 / 14 days, which the airing
+  query honors), **filter** (the popover's control and the settings row deliberately write the same
+  value — what you pick in passing is what the next open remembers) and **cover art** on or off.
+- The popover **names its views**: the switcher spells out Próximos, Temporadas and Ajustes instead
+  of hiding them behind a glyph.
+
+### Changed
+
+- `normalize_media_page` and `normalize_airing` now also return `titles: {romaji, english, native}`,
+  with `null` flattened to `""` so callers can fall through. `title` keeps its
+  english → romaji → native preference, so existing callers are unaffected.
+
+## [0.3.0] - 2026-09-17
+
+### Added
+
+- **A window filter on the upcoming list** — `Hoy` / `7 días`, as a `SegmentedControl` beside the
+  section title. The feed is always fetched as a seven-day window and narrowing happens
+  client-side, so flipping the filter back and forth never spends AniList budget. `Hoy` ends at the
+  user's own midnight (not UTC's), and an episode that has just started still counts as today —
+  its row says "airing now".
+
+## [0.2.2] - 2026-09-17
+
+### Fixed
+
+- **The lists scroll.** The kit's `ScrollArea` viewport is `size-full`, so a `max-height` root gave
+  it a percentage height that resolves to `auto`: the rows were clipped at 18rem with no way to
+  reach the rest of the window. Both lists now carry a definite height (`h-80`), and the workspace's
+  takes `flex-1` with `min-height: 0`.
+
+### Changed
+
+- The status-bar popover is 24rem wide instead of the kit's 18rem default: the season track, the
+  year stepper and the search field fit on one line. The width is an inline style, because the
+  compiled Tailwind ships no `w-96` to lean on.
+
+## [0.2.1] - 2026-09-17
+
+### Fixed
+
+- **The status-bar popover no longer dismisses itself when the pointer reaches for it.** Opening
+  the chip's popover and sliding the mouse toward it closed it immediately. Escape and a click
+  outside still close it; a focus change the user never asked for no longer does
+  (`onFocusOutside` is prevented). Every dismissal now logs which event fired, so `desktop.log`
+  names the mechanism instead of leaving it to a guess.
+
+## [0.2.0] - 2026-09-17
+
+### Added
+
+- `GET /search?q=&page=&per_page=` — free-text title search
+  (`Page.media(search:, sort: SEARCH_MATCH)`), returning the same normalized media page as
+  `/trending` and `/season` and sharing their 300 s TTL cache and rate-limit floor. Queries with
+  fewer than two non-space characters are rejected before they spend budget, and the cache key
+  folds case and padding, so `One Piece` and `  one piece ` cost one request, not two.
+- **Season browser + title search (L1).** `host.openWorkspace` opens an `anilist` workspace tab
+  with a season/year selector and a debounced search field over the 24 most popular titles of that
+  season. The status-bar popover gains a seasons button that renders the same panel compact, so the
+  search box exists once and only once, and a desktop without the workspace door falls back to that
+  popover (the palette command points at it rather than failing silently). Season and search pages
+  also cache for 300 s client-side, so flipping seasons re-reads the backend's TTL entry instead of
+  spending new AniList budget.
+
+### Fixed
+
+- **The header now names the gateway the data actually comes from.** It read the registry's
+  `primary` row instead, which is a different question: with an SSH box as primary and a local
+  app-managed backend serving the requests, the popover claimed to be reading from the remote
+  while every byte came from the local backend. Resolve `host.state.connectionId` instead — the
+  app's active source, `local` for an app-managed backend, and the documented `null` treated as
+  local — so the label re-renders on a connection or profile swap rather than freezing at
+  `register()` time.
+- The airing query key now carries the source and profile
+  (`['plugin:hermes-anilist', <connectionId>, <profile>, 'airing']`). Two gateways can both
+  expose a `default` profile; without the source in the key their rows shared one cache entry
+  and overwrote each other.
+
+## [0.1.1] - 2026-09-17
+
+### Changed
+
+- **Desktop surface is now a status-bar popover instead of a docked pane.** Closing the only pane a
+  plugin contributes disables that plugin (core pane lifecycle), so a lone pane could not be
+  dismissed without switching the feature off. The chip unfolds the upcoming-episode list; Escape or
+  a click outside closes it.
+- `manifest_version: 2` removed from `plugin.yaml`. `hermes plugins install` pins its own ceiling at
+  1 (`hermes_cli/plugins_cmd.py`), so a v2 declaration made the plugin **uninstallable from git**
+  while still loadable and catalog-valid. Every v2 field (`config_schema`, `python_dependencies`) is
+  parsed with no version gate, so staying on v1 keeps the full feature set.
+- Each row gains a hover action that opens the show on AniList (`ctx.os.openExternal`).

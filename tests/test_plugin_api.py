@@ -1032,7 +1032,7 @@ def test_a_malformed_query_is_not_reported_as_a_rejected_token(monkeypatch):
     monkeypatch.setattr(plugin_api.httpx, "AsyncClient", _fake_transport(_FakeResponse(400, payload)))
 
     with pytest.raises(plugin_api.HTTPException) as failure:
-        asyncio.run(plugin_api._graphql("query { bad }", {}, token="a-valid-looking-token"))
+        asyncio.run(plugin_api._graphql("query { bad }", {}, token="tok"))
 
     assert failure.value.status_code == 502
     assert "Cannot query field" in failure.value.detail          # AniList's words, not a status code

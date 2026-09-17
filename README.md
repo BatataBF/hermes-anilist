@@ -3,9 +3,9 @@
 AniList tracker pane for **Hermes Desktop** — airing countdowns, season browser and episode alerts,
 without leaving the app.
 
-> **Status: early development.** The desktop pane and the read-only AniList backend work today.
-> AniList sign-in (OAuth pin flow) and cron episode alerts land in the next phases; see
-> [Roadmap](#roadmap).
+> **Status: early development.** The pane, the AniList backend (read *and* write) and the pin-flow
+> sign-in all work today: sign in and **Mi lista** becomes your own AniList list, which you can edit
+> from here too. Cron episode alerts land in the next phase; see [Roadmap](#roadmap).
 
 ## What it is
 
@@ -29,7 +29,12 @@ The renderer never holds a credential: it only ever sees public data and a `conf
 - **A local watchlist**: star any show from the feed, the season browser or the search results. The
   **Mi lista** filter then narrows the feed to what you track — your next 7 days are a handful of
   episodes, not a hundred. Statuses are AniList's own five (`watching`, `completed`, `planned`,
-  `paused`, `dropped`) so sign-in can push them straight through later.
+  `paused`, `dropped`) — the vocabulary the account's list is written in.
+- **Your AniList account**: sign in once (the OAuth **pin** flow, no callback server) and the list the
+  plugin reads *is* yours — statuses, progress and scores straight from AniList. Edits go both ways:
+  star a show to add it, set its status (including *rewatching*), step the progress, or take it off
+  the list — that last one behind a confirmation, because it deletes the entry on AniList. Signed out,
+  everything above still works against the local watchlist.
 - **A per-show detail**: cover, format, status, length, duration, score, studio, genres, the next
   episode's countdown, the full description, the episode list, and the tracking controls (status,
   progress ±, remove).
@@ -65,6 +70,11 @@ Then, in Hermes Desktop: **⌘K → Reload desktop plugins**, and enable the plu
 - Hermes `>= 0.21` (Desktop Plugin SDK `@hermes/plugin-sdk`).
 - No AniList credential needed for anything read-only: the public GraphQL API at
   `https://graphql.anilist.co` needs no API key (30 requests/minute shared per host).
+- Signing in — and writing to your list — uses **your own** AniList application: create one in
+  [AniList's developer settings](https://anilist.co/settings/developer) with the redirect
+  `https://anilist.co/api/v2/oauth/pin`, and paste its public Client ID into the pane. The plugin
+  ships no shared application, so no credential of yours passes through anybody else's app, and the
+  token it hands you goes to your profile's `.env` — never to the renderer.
 
 ## How it works
 
@@ -104,9 +114,8 @@ Desktop pane (renderer)          Backend (gateway/serve process)        AniList
   filter, settings. (shipped in `0.4.0`)
 - [x] **L2 · watchlist and detail** — a local watchlist with AniList's status vocabulary, per-show
   detail with the episode list, tracking from any row, the **Mi lista** filter. (shipped in `0.5.0`)
-- [ ] **L3 · sign-in** — AniList OAuth **pin** flow, the token in the backend `.env`, the account's
-  list imported and synced. *(The account routes and their tests landed; the Settings UI and the list
-  import are next.)*
+- [x] **L3 · sign-in** — AniList OAuth **pin** flow, the token in the backend `.env`, and the
+  account's own list read *and* written (status, progress, removals). (shipped in `0.6.0`)
 - [ ] **L4 · alerts** — an action that creates a cronjob per show (exact one-shot at airing time, or
   a daily digest), with the jobs listed and cancellable from the pane.
 - [ ] **L5 · hardening** — i18n review, docs, catalog submission (`category: desktop`,

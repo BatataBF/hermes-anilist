@@ -8,8 +8,24 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
+- **The schedule as a calendar.** A show's page carries a month grid of its air dates now: the days
+  that air are marked, the next one is filled and names its episode, the arrows stop where the
+  schedule does, and the day you pick lists what lands on it. All of it in your own timezone —
+  AniList publishes a moment, not a day.
+- **An episode table with the columns the old list hid** — weekday, date and air time each in its
+  own column, past episodes receding, the next one named.
+- `tools/class_audit.mjs`: every `className` in `desktop/plugin.js` checked against the installed
+  app's compiled stylesheet. A class the build never emitted renders as nothing, silently.
+
 ### Changed
 
+- **The show page leads with what it is for.** The next episode, its day and hour, and the alert
+  action share a card at the top now, instead of being scattered between the metadata and a wall of
+  text.
+- **The tracking status is a select**, not a six-button track — AniList's own vocabulary, and the
+  same reason the alert destinations became one.
+- **The synopsis is folded by default.** It was the longest thing on the page and the least urgent;
+  AniList's own broadcast note rides inside it, where it belongs.
 - **The popover's second door goes to Settings.** *Search a show* sent the reader out of the feed and
   then hunting for a search box; the button opens Settings now, where every preference lives. Search
   stays in the workspace's Catalog tab and in the command palette.

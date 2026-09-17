@@ -142,7 +142,9 @@ What `1.0.0` means here: updating never breaks your settings or your list — a 
 ```bash
 uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q   # offline, no network
 node tools/test_plugin_helpers.mjs           # the desktop half's pure helpers, no app needed
+node tools/test_plugin_views.mjs             # renders the show page's views (needs React — see its header)
 node tools/i18n_audit.mjs desktop/plugin.js  # locale parity: used/undefined, defined/unused, skew
+node tools/class_audit.mjs                   # every className exists in the app's compiled stylesheet
 python3 tools/lint_plugin_js.py desktop/plugin.js   # identifiers used but never declared
 hermes plugins doctor "$(pwd)" --ci          # real discovery + register(ctx) contracts
 hermes plugins validate "$(pwd)"             # the same gate the plugin catalog CI runs
@@ -152,6 +154,10 @@ The desktop half is loaded **uncompiled**: a stale identifier left behind by a r
 (`node --check` passes) and only throws `ReferenceError` when that component renders, which the app
 shows as *"plugin-workspace:… failed to render"*. `tools/lint_plugin_js.py` is the cheap net for that
 class — run it after touching `desktop/plugin.js`.
+
+A class name the app's build never emitted is the same trap one layer down: it parses, it lints, and it
+renders nothing at all. `tools/class_audit.mjs` checks every `className` in the file against the
+installed app's compiled stylesheet (pass a path to check against another build).
 
 Install layout matters: the working copy lives in a normal clone (e.g. `~/projects/hermes-anilist`),
 and the installed copy under `<hermes home>/plugins/` is a **git checkout managed by Hermes** — never

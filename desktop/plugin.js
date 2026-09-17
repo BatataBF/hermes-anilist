@@ -23,6 +23,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  DisclosureCaret,
   EmptyState,
   ErrorState,
   Input,
@@ -113,6 +114,15 @@ const STRINGS = {
       ] || status,
     progressLabel: 'Progress',
     episodesTitle: 'Episodes',
+    scheduleTitle: 'Schedule',
+    previousMonth: 'Previous month',
+    nextMonth: 'Next month',
+    columnEpisode: 'EP',
+    columnDay: 'Day',
+    columnDate: 'Date',
+    columnTime: 'Time',
+    leftToAir: (count) => `${count} to air`,
+    synopsis: 'Synopsis',
     noEpisodes: 'AniList has no air dates for this one.',
     noDescription: 'AniList has no description for this one yet.',
     nextEpisode: 'Next episode',
@@ -121,6 +131,21 @@ const STRINGS = {
     scoreOutOf: (score) => `★ ${score}%`,
     monthName: (index) =>
       ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index] || '',
+    monthFull: (index) =>
+      [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December'
+      ][index] || '',
     tabUpcoming: 'Upcoming',
     openUpcoming: 'See everything',
     openSettings: 'Settings',
@@ -252,6 +277,15 @@ const STRINGS = {
       ] || status,
     progressLabel: 'Progreso',
     episodesTitle: 'Episodios',
+    scheduleTitle: 'Calendario',
+    previousMonth: 'Mes anterior',
+    nextMonth: 'Mes siguiente',
+    columnEpisode: 'EP',
+    columnDay: 'Día',
+    columnDate: 'Fecha',
+    columnTime: 'Hora',
+    leftToAir: (count) => `${count} por emitir`,
+    synopsis: 'Sinopsis',
     noEpisodes: 'AniList no tiene fechas de emisión para este título.',
     noDescription: 'AniList todavía no tiene descripción para este título.',
     nextEpisode: 'Próximo episodio',
@@ -260,6 +294,21 @@ const STRINGS = {
     scoreOutOf: (score) => `★ ${score}%`,
     monthName: (index) =>
       ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][index] || '',
+    monthFull: (index) =>
+      [
+        'enero',
+        'febrero',
+        'marzo',
+        'abril',
+        'mayo',
+        'junio',
+        'julio',
+        'agosto',
+        'septiembre',
+        'octubre',
+        'noviembre',
+        'diciembre'
+      ][index] || '',
     tabUpcoming: 'Próximos',
     openUpcoming: 'Ver todo',
     openSettings: 'Ajustes',
@@ -829,6 +878,80 @@ function airedDate(airingAt, t) {
   const date = new Date((airingAt || 0) * 1000)
 
   return `${date.getDate()} ${t('monthName', date.getMonth())}`
+}
+
+/** "10:30" — the hour a show goes up, on the reader's own clock. */
+function clockTime(airingAt) {
+  const at = new Date((airingAt || 0) * 1000)
+
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+}
+
+/** "September 2026" — the heading over one month of the calendar. */
+function monthHeading(year, month, t) {
+  return `${t('monthFull', month)} ${year}`
+}
+
+/** The first episode still to air, or nothing when the schedule is spent. */
+function nextAiring(episodes, now = Date.now() / 1000) {
+  const coming = (episodes || []).filter((episode) => episode && (episode.airingAt || 0) > now)
+
+  return coming.sort((a, b) => a.airingAt - b.airingAt)[0] || null
+}
+
+/**
+ * The month the calendar opens on: the next episode's, so the reader lands where
+ * the show still is. A finished show opens on its last month instead of an empty
+ * present — the schedule that exists is the one worth showing.
+ */
+function calendarMonth(episodes, now = Date.now() / 1000) {
+  const next = nextAiring(episodes, now)
+  const aired = (episodes || []).filter((episode) => episode && episode.airingAt)
+  const fallback = aired.sort((a, b) => b.airingAt - a.airingAt)[0]
+  const at = new Date(((next && next.airingAt) || (fallback && fallback.airingAt) || now) * 1000)
+
+  return { year: at.getFullYear(), month: at.getMonth() }
+}
+
+/**
+ * Six weeks of local days for one month, each cell carrying the episodes that air
+ * on it. Always 42 cells so the grid never jumps height as the reader moves; a
+ * cell's `key` is the same day key the feed groups by, so both surfaces agree on
+ * what "a day" is.
+ */
+function monthGrid(episodes, year, month) {
+  const byDay = new Map()
+
+  for (const episode of episodes || []) {
+    if (!episode || !episode.airingAt) continue
+    const key = dayKey(episode.airingAt)
+
+    if (!byDay.has(key)) byDay.set(key, [])
+    byDay.get(key).push(episode)
+  }
+
+  const first = new Date(year, month, 1)
+  const cells = []
+
+  for (let index = 0; index < 42; index += 1) {
+    const at = new Date(year, month, 1 - first.getDay() + index)
+    const key = dayKey(at.getTime() / 1000)
+
+    cells.push({ day: at.getDate(), inMonth: at.getMonth() === month, items: byDay.get(key) || [], key })
+  }
+
+  return cells
+}
+
+/** Whether anything airs before (-1) or after (+1) the given month — the arrows' stops. */
+function hasEpisodesOutside(episodes, year, month, direction) {
+  const edge = new Date(year, month + (direction > 0 ? 1 : 0), 1).getTime() / 1000
+
+  return (episodes || []).some((episode) => {
+    const at = (episode && episode.airingAt) || 0
+
+    return direction > 0 ? at >= edge : at < edge
+  })
 }
 
 // ─── seasons & search (L1) ──────────────────────────────────────────────────
@@ -2542,15 +2665,336 @@ function entryFromDetail(show) {
   }
 }
 
-function EpisodeRow({ episode, t }) {
+/** "Fri 18 Sep · 10:30" — the day and hour an episode lands, spelled out. */
+function airingWhen(airingAt, t) {
+  const at = new Date((airingAt || 0) * 1000)
+
+  return `${t('dayName', at.getDay())} ${airedDate(airingAt, t)} · ${clockTime(airingAt)}`
+}
+
+/**
+ * A folded section: the label is the affordance and the caret says which way it
+ * opens. Long prose lives behind one of these so the actions and the schedule
+ * keep the top of the page instead of being pushed past a wall of text.
+ */
+function Fold({ children, label, open, onToggle }) {
   return jsxs('div', {
-    className: 'flex items-center justify-between gap-2 px-1 py-0.5 text-[0.6875rem]',
+    className: 'flex flex-col border-t border-(--ui-stroke-secondary) pt-2',
     children: [
-      jsx('span', {
-        className: 'shrink-0 text-(--ui-text-secondary)',
-        children: t('episode', episode.episode)
+      jsx('button', {
+        type: 'button',
+        className:
+          'flex cursor-pointer items-center gap-1.5 text-left text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary) hover:text-(--ui-text-secondary)',
+        onClick: () => {
+          haptic('tap')
+          onToggle()
+        },
+        children: [jsx(DisclosureCaret, { open }, 'caret'), jsx('span', { children: label }, 'label')]
       }),
-      jsx('span', { className: 'truncate text-(--ui-text-quaternary)', children: episodeWhen(episode, t) })
+      open ? jsx('div', { className: 'pt-2', children }) : null
+    ]
+  })
+}
+
+/** One day of the calendar: marked when something airs, named when it is next. */
+function DayCell({ cell, isNext, isPicked, isToday, onPick, t }) {
+  const marked = cell.items.length > 0
+  const label = isNext ? t('episode', cell.items[0].episode) : ''
+  const skin = isNext
+    ? 'bg-(--chrome-action-hover) font-semibold text-(--ui-text-primary)'
+    : isPicked && marked
+      ? 'bg-(--ui-bg-tertiary) text-(--ui-text-primary)'
+      : isToday
+        ? 'font-semibold text-(--ui-text-primary)'
+        : 'text-(--ui-text-secondary)'
+  const children = [
+    jsx('span', { children: String(cell.day) }, 'day'),
+    label ? jsx('span', { className: 'text-[0.5625rem]', children: label }, 'ep') : null,
+    marked && !label ? jsx('span', { className: 'text-[0.5625rem] leading-none', children: '•' }, 'dot') : null
+  ]
+
+  if (!marked) {
+    return jsx('div', {
+      className: `flex flex-col items-center justify-center rounded-sm py-1 text-[0.6875rem] leading-none ${
+        cell.inMonth ? '' : 'opacity-50'
+      } text-(--ui-text-quaternary)`,
+      children: children[0]
+    })
+  }
+
+  return jsx('button', {
+    type: 'button',
+    className: `flex cursor-pointer flex-col items-center justify-center rounded-sm py-1 text-[0.6875rem] leading-none ${
+      cell.inMonth ? '' : 'opacity-50'
+    } ${skin}`,
+    onClick: () => onPick(cell.key),
+    children
+  })
+}
+
+/**
+ * The air dates as a calendar.
+ *
+ * A column of "EP 1 — 3 Jul" leaves the reader to do the arithmetic; a month grid
+ * answers the real question — which day does this show land on — at a glance. Days
+ * that carry an episode are marked, the next one is filled and names its episode,
+ * and the day you pick lists what airs on it. All of it in the reader's own
+ * timezone: the schedule is published in UTC, and nobody tracks a show in UTC.
+ */
+function EpisodeCalendar({ episodes, t }) {
+  const now = Date.now() / 1000
+  const [cursor, setCursor] = useState(() => calendarMonth(episodes, now))
+  const [picked, setPicked] = useState(() => {
+    const next = nextAiring(episodes, now)
+    const aired = (episodes || []).filter((episode) => episode && episode.airingAt)
+    // Nothing left to air? Then the last episode is the one worth showing.
+    const last = aired.sort((a, b) => a.airingAt - b.airingAt)[aired.length - 1]
+
+    return dayKey((next && next.airingAt) || (last && last.airingAt) || now)
+  })
+  const cells = monthGrid(episodes, cursor.year, cursor.month)
+  const next = nextAiring(episodes, now)
+  const nextKey = next ? dayKey(next.airingAt) : ''
+  const todayKey = dayKey(now)
+  const pickedCell = cells.find((cell) => cell.key === picked && cell.items.length)
+  const left = (episodes || []).filter((episode) => episode && (episode.airingAt || 0) > now).length
+  const move = (step) => {
+    haptic('selection')
+    setCursor((prev) => {
+      const at = new Date(prev.year, prev.month + step, 1)
+
+      return { year: at.getFullYear(), month: at.getMonth() }
+    })
+  }
+
+  return jsxs('div', {
+    className: 'flex flex-col gap-2 rounded-md border border-(--ui-stroke-secondary) p-2',
+    children: [
+      jsxs('div', {
+        className: 'flex items-center justify-between gap-2',
+        children: [
+          jsx('div', {
+            className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+            children: t('scheduleTitle')
+          }),
+          jsxs('div', {
+            className: 'flex items-center gap-1',
+            children: [
+              jsx(Tip, {
+                label: t('previousMonth'),
+                children: jsx(Button, {
+                  type: 'button',
+                  variant: 'ghost',
+                  size: 'micro',
+                  disabled: !hasEpisodesOutside(episodes, cursor.year, cursor.month, -1),
+                  onClick: () => move(-1),
+                  children: '‹'
+                })
+              }),
+              jsx(Button, {
+                type: 'button',
+                variant: 'ghost',
+                size: 'micro',
+                onClick: () => {
+                  haptic('tap')
+                  setCursor(calendarMonth(episodes, now))
+                  setPicked(todayKey)
+                },
+                children: t('dayToday')
+              }),
+              jsx(Tip, {
+                label: t('nextMonth'),
+                children: jsx(Button, {
+                  type: 'button',
+                  variant: 'ghost',
+                  size: 'micro',
+                  disabled: !hasEpisodesOutside(episodes, cursor.year, cursor.month, 1),
+                  onClick: () => move(1),
+                  children: '›'
+                })
+              })
+            ]
+          })
+        ]
+      }),
+      jsxs('div', {
+        className: 'flex items-center justify-between gap-2',
+        children: [
+          jsx('div', {
+            className: 'text-xs font-medium text-(--ui-text-primary)',
+            children: monthHeading(cursor.year, cursor.month, t)
+          }),
+          left
+            ? jsx('div', {
+                className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
+                children: t('leftToAir', left)
+              })
+            : null
+        ]
+      }),
+      jsxs('div', {
+        className: 'grid gap-0.5',
+        // Seven columns is a calendar, not a Tailwind scale step the kit ships.
+        style: { gridTemplateColumns: 'repeat(7, 1fr)' },
+        children: [
+          ...[0, 1, 2, 3, 4, 5, 6].map((day) =>
+            jsx(
+              'div',
+              {
+                className: 'text-center text-[0.5625rem] uppercase text-(--ui-text-quaternary)',
+                children: t('dayName', day)
+              },
+              `weekday:${day}`
+            )
+          ),
+          ...cells.map((cell) =>
+            jsx(
+              DayCell,
+              {
+                cell,
+                isNext: cell.key === nextKey,
+                isPicked: cell.key === picked,
+                isToday: cell.key === todayKey,
+                onPick: (key) => {
+                  haptic('selection')
+                  setPicked(key)
+                },
+                t
+              },
+              cell.key
+            )
+          )
+        ]
+      }),
+      pickedCell
+        ? jsx('div', {
+            className: 'flex flex-col gap-0.5 border-t border-(--ui-stroke-secondary) pt-1',
+            children: pickedCell.items.map((episode) =>
+              jsxs(
+                'div',
+                {
+                  className: 'flex items-center justify-between gap-2 text-[0.6875rem]',
+                  children: [
+                    jsx('span', {
+                      className: 'shrink-0 text-(--ui-text-secondary)',
+                      children: t('episode', episode.episode)
+                    }),
+                    jsx('span', {
+                      className: 'truncate text-(--ui-text-quaternary)',
+                      children: `${clockTime(episode.airingAt)} · ${episodeWhen(episode, t)}`
+                    })
+                  ]
+                },
+                `picked:${episode.episode}`
+              )
+            )
+          })
+        : null
+    ]
+  })
+}
+
+/**
+ * Every episode, in columns: the weekday, the date and the hour each one lands.
+ * "3 Jul" alone does not say whether that was a Friday or what time it went up,
+ * and those are the two things a reader checking a schedule wants.
+ */
+function EpisodeTable({ episodes, hasMore, loading, next, onLoadMore, t }) {
+  const columns = '2.5rem 2rem 3.75rem 1fr'
+  const heads = [t('columnEpisode'), t('columnDay'), t('columnDate'), t('columnTime')]
+
+  return jsxs('div', {
+    className: 'flex flex-col',
+    children: [
+      jsxs('div', {
+        className: 'grid gap-2 border-b border-(--ui-stroke-secondary) pb-1',
+        style: { gridTemplateColumns: columns },
+        children: heads.map((head, index) =>
+          jsx(
+            'div',
+            {
+              className: `text-[0.5625rem] uppercase tracking-wide text-(--ui-text-quaternary)${
+                index === heads.length - 1 ? ' text-right' : ''
+              }`,
+              children: head
+            },
+            head
+          )
+        )
+      }),
+      ...episodes.map((episode) => {
+        const isNext = !!next && next.episode === episode.episode
+        const aired = (episode.airingAt || 0) <= Date.now() / 1000
+
+        return jsxs(
+          'div',
+          {
+            className: `grid gap-2 py-0.5 text-[0.6875rem] ${
+              isNext
+                ? 'font-semibold text-(--ui-text-primary)'
+                : aired
+                  ? 'text-(--ui-text-quaternary) opacity-60'
+                  : 'text-(--ui-text-secondary)'
+            }`,
+            style: { gridTemplateColumns: columns },
+            children: [
+              jsx('div', { children: String(episode.episode) }),
+              jsx('div', { children: t('dayName', new Date((episode.airingAt || 0) * 1000).getDay()) }),
+              jsx('div', { children: airedDate(episode.airingAt, t) }),
+              jsx('div', { className: 'text-right', children: clockTime(episode.airingAt) })
+            ]
+          },
+          `ep:${episode.episode}`
+        )
+      }),
+      hasMore
+        ? jsx('div', {
+            className: 'flex justify-end pt-1',
+            children: jsx(Button, {
+              type: 'button',
+              variant: 'ghost',
+              size: 'micro',
+              disabled: loading,
+              onClick: onLoadMore,
+              children: loading ? t('loadingMore') : t('loadMore')
+            })
+          })
+        : null
+    ]
+  })
+}
+
+/**
+ * The tracking status, as a select. AniList's vocabulary is six values and a
+ * segmented track stops reading past three — the same reason the alert
+ * destinations are a select. Radix renders an empty trigger when no item matches
+ * `value`, so an unknown status falls back to the first real one.
+ */
+function StatusSelect({ onChange, options, t, value }) {
+  const active = options.includes(value) ? value : options[0]
+
+  return jsxs('div', {
+    className: 'flex min-w-40 flex-col gap-1',
+    children: [
+      jsx('div', {
+        className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+        children: t('watchStatus')
+      }),
+      jsxs(Select, {
+        onValueChange: (next) => {
+          haptic('selection')
+          onChange(next)
+        },
+        value: active,
+        children: [
+          jsx(SelectTrigger, { className: 'h-7 w-full text-xs', children: jsx(SelectValue, {}) }),
+          jsx(SelectContent, {
+            children: options.map((status) =>
+              jsx(SelectItem, { value: status, children: t('watchStatusName', status) }, status)
+            )
+          })
+        ]
+      })
     ]
   })
 }
@@ -2572,9 +3016,13 @@ function DetailPanel({ compact = false }) {
   const entry = tracked.entry(mediaId)
   // What "show more" has gathered past the page that rides along with the detail.
   const [more, setMore] = useState({ hasMore: null, items: [], loading: false })
+  // Prose is folded by default — it is the longest thing on the page and the least
+  // urgent — and folding does not follow the reader to the next show.
+  const [synopsis, setSynopsis] = useState(false)
 
   useEffect(() => {
     setMore({ hasMore: null, items: [], loading: false })
+    setSynopsis(false)
   }, [mediaId])
 
   if (!mediaId) return null
@@ -2616,6 +3064,13 @@ function DetailPanel({ compact = false }) {
     (a, b) => (a.airingAt || 0) - (b.airingAt || 0)
   )
   const hasMore = more.hasMore === null ? !!show.hasNextPage : more.hasMore
+  // One reading of "the episode this page is about": the card, the calendar's
+  // filled day and the table's highlighted row all read it, so they cannot
+  // disagree. The API's own `nextEpisode` is the fallback for a show whose
+  // per-episode schedule AniList has not published yet.
+  const next =
+    nextAiring(episodesList) ||
+    (show.nextEpisode && show.airingAt ? { episode: show.nextEpisode, airingAt: show.airingAt } : null)
 
   const backToFeed = () => {
     haptic('tap')
@@ -2749,156 +3204,186 @@ function DetailPanel({ compact = false }) {
                       ? jsx('span', { className: 'truncate', children: show.genres.join(' · ') })
                       : null
                   ]
-                }),
-                show.nextEpisode
-                  ? jsxs('div', {
-                      className: 'text-[0.6875rem] text-(--ui-text-secondary)',
-                      children: [
-                        `${t('nextEpisode')} · ${t('episode', show.nextEpisode)} · `,
-                        countdown(show.airingAt, t)
-                      ]
-                    })
-                  : null,
+                })
+              ]
+            })
+          ]
+        }),
+        // What the page exists for: the next episode, its day and hour, and the
+        // one action that follows from it.
+        next
+          ? jsxs('div', {
+              className: 'flex flex-col gap-2 rounded-md border border-(--ui-stroke-secondary) p-2',
+              children: [
                 jsxs('div', {
-                  className: 'flex flex-wrap items-center gap-2 pt-1',
-                  children: tracked.account
-                    ? entry
-                      ? [
-                          // The account's own entry: its status and progress are
-                          // what is written, and removing it deletes the entry.
-                          jsx('div', {
-                            className: 'flex flex-col gap-1',
-                            children: [
-                              jsx('div', {
-                                className:
-                                  'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
-                                children: t('watchStatus')
-                              }),
-                              jsx(SegmentedControl, {
-                                onChange: (status) => {
-                                  haptic('selection')
-                                  void tracked.account.setStatus(show.id, status, show.episodes)
-                                },
-                                options: ACCOUNT_STATUSES.map((status) => ({
-                                  id: status,
-                                  label: t('watchStatusName', status)
-                                })),
-                                value: entry.status
-                              })
-                            ]
-                          }),
-                          jsx(ProgressStepper, { entry, onStep: stepAccountProgress, show, t }),
-                          jsx(Button, {
-                            type: 'button',
-                            variant: 'ghost',
-                            size: 'sm',
-                            onClick: () => askRemoval(show, title),
-                            children: t('removeFromList')
-                          })
-                        ]
-                      : jsx(Button, {
-                          type: 'button',
-                          variant: 'secondary',
-                          size: 'sm',
-                          onClick: () => {
-                            haptic('tap')
-                            void tracked.account.add(show)
-                          },
-                          children: t('addToList')
-                        })
-                    : entry
-                    ? [
+                  className: 'flex flex-wrap items-center justify-between gap-2',
+                  children: [
+                    jsxs('div', {
+                      className: 'flex min-w-0 items-center gap-2',
+                      children: [
                         jsx('div', {
-                          className: 'flex flex-col gap-1',
-                          children: [
-                            jsx('div', {
-                              className:
-                                'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
-                              children: t('watchStatus')
-                            }),
-                            jsx(SegmentedControl, {
-                              onChange: (status) => {
-                                haptic('selection')
-                                void saveWatch(source, show.id, { status })
-                              },
-                              options: WATCH_STATUSES.map((status) => ({
-                                id: status,
-                                label: t('watchStatusName', status)
-                              })),
-                              value: entry.status
-                            })
-                          ]
+                          className:
+                            'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+                          children: t('nextEpisode')
                         }),
-                        jsx(ProgressStepper, { entry, onStep: stepProgress, show, t }),
-                        jsx(Button, {
-                          type: 'button',
-                          variant: 'ghost',
-                          size: 'sm',
-                          onClick: () => {
-                            haptic('tap')
-                            void watch.drop(show.id)
-                          },
-                          children: t('removeFromList')
+                        jsx('div', {
+                          className: 'text-xs font-medium text-(--ui-text-primary)',
+                          children: t('episode', next.episode)
+                        }),
+                        jsx('div', {
+                          className: 'text-[0.6875rem] text-(--ui-text-secondary)',
+                          children: countdown(next.airingAt, t)
                         })
                       ]
-                    : jsx(Button, {
-                        type: 'button',
-                        variant: 'secondary',
-                        size: 'sm',
-                        onClick: addToList,
-                        children: t('addToList')
-                      })
+                    }),
+                    jsx('div', {
+                      className: 'text-[0.6875rem] text-(--ui-text-quaternary)',
+                      children: airingWhen(next.airingAt, t)
+                    })
+                  ]
                 }),
                 // Independent of the account: an alert is a cron job, and the air
                 // dates it needs are public — signed out works the same.
                 jsx(AlertControl, { show, t })
               ]
             })
-          ]
-        }),
-        show.description
-          ? jsx('div', {
-              className: 'whitespace-pre-line break-words text-xs text-(--ui-text-secondary)',
-              children: show.description
-            })
-          : jsx('div', {
-              className: 'text-xs text-(--ui-text-quaternary)',
-              children: t('noDescription')
-            }),
+          : null,
         jsxs('div', {
-          className: 'flex flex-col',
-          children: [
-            jsxs('div', {
-              className: 'flex items-center gap-2 pt-1',
+          className: 'flex flex-wrap items-end gap-3 pt-1',
+          children: tracked.account
+            ? entry
+              ? [
+                  // The account's own entry: its status and progress are what is
+                  // written, and removing it deletes the entry on AniList.
+                  jsx(
+                    StatusSelect,
+                    {
+                      onChange: (status) => void tracked.account.setStatus(show.id, status, show.episodes),
+                      options: ACCOUNT_STATUSES,
+                      t,
+                      value: entry.status
+                    },
+                    'status'
+                  ),
+                  jsx(ProgressStepper, { entry, onStep: stepAccountProgress, show, t }, 'progress'),
+                  jsx(
+                    Button,
+                    {
+                      type: 'button',
+                      variant: 'ghost',
+                      size: 'sm',
+                      onClick: () => askRemoval(show, title),
+                      children: t('removeFromList')
+                    },
+                    'remove'
+                  )
+                ]
+              : jsx(Button, {
+                  type: 'button',
+                  variant: 'secondary',
+                  size: 'sm',
+                  onClick: () => {
+                    haptic('tap')
+                    void tracked.account.add(show)
+                  },
+                  children: t('addToList')
+                })
+            : entry
+              ? [
+                  jsx(
+                    StatusSelect,
+                    {
+                      onChange: (status) => void saveWatch(source, show.id, { status }),
+                      options: WATCH_STATUSES,
+                      t,
+                      value: entry.status
+                    },
+                    'status'
+                  ),
+                  jsx(ProgressStepper, { entry, onStep: stepProgress, show, t }, 'progress'),
+                  jsx(
+                    Button,
+                    {
+                      type: 'button',
+                      variant: 'ghost',
+                      size: 'sm',
+                      onClick: () => {
+                        haptic('tap')
+                        void watch.drop(show.id)
+                      },
+                      children: t('removeFromList')
+                    },
+                    'remove'
+                  )
+                ]
+              : jsx(Button, {
+                  type: 'button',
+                  variant: 'secondary',
+                  size: 'sm',
+                  onClick: addToList,
+                  children: t('addToList')
+                })
+        }),
+        jsx(Fold, {
+          label: t('synopsis'),
+          open: synopsis,
+          onToggle: () => setSynopsis((prev) => !prev),
+          children: show.description
+            ? jsx('div', {
+                className: 'whitespace-pre-line break-words text-xs text-(--ui-text-secondary)',
+                children: show.description
+              })
+            : jsx('div', {
+                className: 'text-xs text-(--ui-text-quaternary)',
+                children: t('noDescription')
+              })
+        }),
+        // The calendar first, then every episode in columns: the grid locates the
+        // reader in the schedule, the table answers "and the rest?".
+        episodesList.length === 0
+          ? jsxs('div', {
+              className: 'flex flex-col gap-2',
               children: [
-                jsx('div', {
-                  className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
-                  children: t('episodesTitle')
+                jsxs('div', {
+                  className: 'flex items-center gap-2 pt-1',
+                  children: [
+                    jsx('div', {
+                      className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+                      children: t('episodesTitle')
+                    }),
+                    jsx(Separator, { className: 'flex-1' })
+                  ]
                 }),
-                jsx(Separator, { className: 'flex-1' })
-              ]
-            }),
-            episodesList.length === 0
-              ? jsx('div', {
+                jsx('div', {
                   className: 'pt-1 text-[0.6875rem] text-(--ui-text-quaternary)',
                   children: t('noEpisodes')
                 })
-              : episodesList.map((episode) => jsx(EpisodeRow, { episode, t }, `ep:${episode.episode}`)),
-            hasMore
-              ? jsx('div', {
-                  className: 'flex justify-end pt-1',
-                  children: jsx(Button, {
-                    type: 'button',
-                    variant: 'ghost',
-                    size: 'micro',
-                    disabled: more.loading,
-                    onClick: loadMore,
-                    children: more.loading ? t('loadingMore') : t('loadMore')
-                  })
+              ]
+            })
+          : jsxs('div', {
+              className: 'flex flex-col gap-2',
+              children: [
+                jsx(EpisodeCalendar, { episodes: episodesList, t }, `calendar:${mediaId}`),
+                jsxs('div', {
+                  className: 'flex items-center gap-2 pt-1',
+                  children: [
+                    jsx('div', {
+                      className: 'text-[0.6875rem] uppercase tracking-wide text-(--ui-text-quaternary)',
+                      children: t('episodesTitle')
+                    }),
+                    jsx(Separator, { className: 'flex-1' })
+                  ]
+                }),
+                jsx(EpisodeTable, {
+                  episodes: episodesList,
+                  hasMore,
+                  loading: more.loading,
+                  next,
+                  onLoadMore: loadMore,
+                  t
                 })
-              : null
-          ]
-        })
+              ]
+            })
       ]
     })
   })

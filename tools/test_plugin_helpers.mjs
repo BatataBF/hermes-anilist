@@ -50,7 +50,8 @@ const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
   'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
-  'preferredRoute', 'runAtLabel'
+  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate',
+  'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring'
 ]
 
 const helpers = await import(
@@ -225,6 +226,74 @@ test('a destination reads as its label, and a non-default profile is named', () 
   assert.equal(helpers.alertDestinationLabel({ mode: 'local', profile: 'default' }, t), 'This device')
   assert.equal(helpers.alertDestinationLabel({ mode: 'remote', label: 'VPS Zonda', targetProfile: 'trabajo' }, t), 'VPS Zonda · trabajo')
   assert.equal(helpers.alertRouteLabel({ mode: 'remote', label: 'VPS Zonda', targetProfile: 'default' }, { deliver: 'telegram:1' }, t), 'VPS Zonda · Telegram')
+})
+
+// ─── the show page's calendar ───────────────────────────────────────────────
+
+/** A local wall-clock instant, as the calendar helpers see one (unix seconds). */
+const wall = (year, month, day, hour = 10, minute = 30) =>
+  Math.floor(new Date(year, month, day, hour, minute).getTime() / 1000)
+
+test('clockTime reads the reader\'s own clock, zero-padded', () => {
+  assert.equal(helpers.clockTime(wall(2026, 8, 18)), '10:30')
+  assert.equal(helpers.clockTime(wall(2026, 8, 18, 21, 5)), '21:05')
+})
+
+test('calendarMonth opens on the next episode, and on the last one once a show is over', () => {
+  const episodes = [{ airingAt: wall(2026, 6, 3) }, { airingAt: wall(2026, 8, 18) }]
+
+  assert.deepEqual(helpers.calendarMonth(episodes, wall(2026, 8, 17)), { year: 2026, month: 8 })
+  // Everything aired: the calendar shows the schedule that exists, not an empty month.
+  assert.deepEqual(helpers.calendarMonth(episodes, wall(2026, 9, 1)), { year: 2026, month: 8 })
+  assert.deepEqual(helpers.calendarMonth([], wall(2026, 8, 17)), { year: 2026, month: 8 })
+})
+
+test('monthGrid is six weeks of local days, each carrying what airs on it', () => {
+  const cells = helpers.monthGrid([{ episode: 12, airingAt: wall(2026, 8, 18) }], 2026, 8)
+
+  assert.equal(cells.length, 42)
+  // September 2026 opens on a Tuesday, so the grid starts on Sunday 30 August.
+  assert.equal(cells[0].day, 30)
+  assert.equal(cells[0].inMonth, false)
+  assert.equal(cells[2].day, 1)
+  assert.equal(cells[2].inMonth, true)
+
+  const marked = cells.filter((cell) => cell.items.length)
+
+  assert.equal(marked.length, 1)
+  assert.equal(marked[0].day, 18)
+  assert.equal(marked[0].key, helpers.dayKey(wall(2026, 8, 18)))
+})
+
+test('nextAiring is the first episode still to come, or nothing', () => {
+  const episodes = [
+    { episode: 11, airingAt: wall(2026, 8, 11) },
+    { episode: 12, airingAt: wall(2026, 8, 18) }
+  ]
+
+  assert.equal(helpers.nextAiring(episodes, wall(2026, 8, 17)).episode, 12)
+  assert.equal(helpers.nextAiring(episodes, wall(2026, 8, 18, 11)), null)
+  assert.equal(helpers.nextAiring([], wall(2026, 8, 17)), null)
+  assert.equal(helpers.nextAiring(null, wall(2026, 8, 17)), null)
+})
+
+test('the month arrows stop where the schedule does', () => {
+  const episodes = [{ airingAt: wall(2026, 8, 11) }, { airingAt: wall(2026, 8, 18) }]
+
+  assert.equal(helpers.hasEpisodesOutside(episodes, 2026, 8, -1), false)
+  assert.equal(helpers.hasEpisodesOutside(episodes, 2026, 8, 1), false)
+  assert.equal(helpers.hasEpisodesOutside(episodes, 2026, 7, 1), true)
+  assert.equal(helpers.hasEpisodesOutside(episodes, 2026, 9, -1), true)
+})
+
+test('monthHeading spells the month out and pins the year', () => {
+  assert.equal(helpers.monthHeading(2026, 8, t), 'September 2026')
+  assert.equal(helpers.monthHeading(2026, 8, makeT('es')), 'septiembre 2026')
+})
+
+test('airingWhen names the weekday, the date and the hour', () => {
+  assert.equal(helpers.airingWhen(wall(2026, 8, 18), t), 'Fri 18 Sep · 10:30')
+  assert.equal(helpers.airingWhen(wall(2026, 8, 18), makeT('es')), 'Vie 18 sep · 10:30')
 })
 
 if (failed) {

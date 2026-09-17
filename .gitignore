@@ -10,6 +10,9 @@ venv/
 .install-metadata.json
 plugin-data/
 
+# Plan-mode artifacts (working plans live here; the plan itself is not a deliverable)
+.hermes/
+
 # Editors / OS
 .DS_Store
 .idea/

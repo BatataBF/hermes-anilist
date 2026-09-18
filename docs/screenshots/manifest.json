@@ -1,0 +1,29 @@
+[
+  {
+    "file": "popover-upcoming.png",
+    "surface": "status-bar chip → popover",
+    "theme": "light",
+    "width": 2032,
+    "height": 1072,
+    "source": "Hermes Desktop on macOS",
+    "note": "The airing feed the chip unfolds: the day sections, Today / 7 days / My list, a row's hover action, and the two doors out (the workspace and Settings)."
+  },
+  {
+    "file": "workspace-catalog.png",
+    "surface": "workspace · Catalog",
+    "theme": "light",
+    "width": 2032,
+    "height": 1072,
+    "source": "Hermes Desktop on macOS",
+    "note": "Browsing a season and year, with the search box above and the star that adds a show to your list on every row."
+  },
+  {
+    "file": "workspace-show-page.png",
+    "surface": "workspace · show page",
+    "theme": "light",
+    "width": 2032,
+    "height": 1072,
+    "source": "Hermes Desktop on macOS",
+    "note": "One show: the next-episode card that leads the page, its alert action, the month calendar of air dates and the episode list below."
+  }
+]

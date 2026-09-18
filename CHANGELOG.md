@@ -8,6 +8,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
+- **A screenshot gallery in the README** (`docs/screenshots/`) with a `manifest.json` recording each
+  image's surface, theme and window size — the chip's popover, the Catalog tab, and a show's page. Taken
+  from the app on a real account: no mock data, and nothing credential-shaped in frame.
 - **`CONTRIBUTING.md`** — the loop (clone → the exact commands → `hermes plugins update`), the safety
   invariants a change has to respect (the renderer never holds a credential, one HTTP client and one
   cache, reads name their store, `null` is never invented, writes are absolute, declared capabilities

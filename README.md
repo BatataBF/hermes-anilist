@@ -30,6 +30,18 @@ A Hermes plugin with three halves in one installable folder:
 
 The renderer never holds a credential: it only ever sees public data and a `connected` flag.
 
+## Screenshots
+
+Taken from the app itself, on a real account and a real list — no mock data, and no credential anywhere
+in frame: the pane only ever renders public AniList data and your own list. Each file's window size,
+surface and theme are recorded in [`docs/screenshots/manifest.json`](docs/screenshots/manifest.json).
+
+| | |
+|---|---|
+| ![The status-bar chip's popover: the airing feed, its day sections and the two doors out](docs/screenshots/popover-upcoming.png) | **The chip and its popover.** What the plugin adds to the status bar, opened: the airing window sectioned by local day, `Today / 7 days / My list`, a row's hover action, and the two doors out — the full workspace and Settings. |
+| ![The Catalog tab: a season and year with the search box above and starred rows](docs/screenshots/workspace-catalog.png) | **Workspace ▸ Catalog.** Browsing a season and year, search above, and the star on every row that puts a show on your list. |
+| ![A show's page: the next episode card, the calendar of air dates and the episode list](docs/screenshots/workspace-show-page.png) | **Workspace ▸ a show.** The next-episode card leading the page with its alert action, the month calendar of air dates, and the episode list below. |
+
 ## Capabilities
 
 | Capability | Where | What it does |
@@ -254,6 +266,7 @@ skills/usage/SKILL.md           # the skill that teaches when to reach for the t
 tests/                          # the backend suites (offline, no network)
 tools/                          # dev tooling: JS lint, class and i18n audits, headless view tests
 plugin-catalog/                 # the entry to submit to NousResearch/hermes-agent (never read at runtime)
+docs/screenshots/               # the README gallery, with a manifest of surface, theme and window size
 .github/workflows/ci.yml        # catalog validation + ruff + pytest + the desktop half's checks
 ```
 

@@ -50,7 +50,7 @@ const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
   'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
-  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon', 'comingAiring',
+  'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon', 'comingAiring', 'episodeTag',
   'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring'
 ]
 
@@ -318,6 +318,14 @@ test('a synopsis that runs past the clip fades out to say so', () => {
 test('an open synopsis is neither clipped nor faded', () => {
   assert.equal(helpers.synopsisStyle(true, true), undefined)
   assert.equal(helpers.synopsisStyle(true, false), undefined)
+})
+
+test('the chip names the episode, with the show\'s length when AniList knows it', () => {
+  assert.equal(helpers.episodeTag({ episode: 12, totalEpisodes: 12 }, t), 'EP 12/12')
+  assert.equal(helpers.episodeTag({ episode: 12, totalEpisodes: null }, t), 'EP 12')
+  assert.equal(helpers.episodeTag({ episode: 12 }, t), 'EP 12')
+  assert.equal(helpers.episodeTag({ totalEpisodes: 12 }, t), '', 'no episode, nothing to name')
+  assert.equal(helpers.episodeTag(null, t), '')
 })
 
 // ─── the status-bar chip ────────────────────────────────────────────────────

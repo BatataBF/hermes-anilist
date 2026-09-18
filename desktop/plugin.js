@@ -430,6 +430,15 @@ function countdown(airingAt, t) {
   return t('inMinutes', minutes)
 }
 
+/** "EP 12/12" when the show's length is known, "EP 12" when AniList has not said. */
+function episodeTag(item, t) {
+  if (!item || !item.episode) return ''
+
+  const total = Number(item.totalEpisodes)
+
+  return total > 0 ? t('episodeProgress', item.episode, total) : t('episode', item.episode)
+}
+
 /** The clock face the chip wears: on air within the hour, or something still to wait for. */
 function chipIcon(airingAt, now = Date.now() / 1000) {
   return airingAt && airingAt - now <= 3600 ? 'broadcast' : 'clock'
@@ -3706,6 +3715,7 @@ function NextChip() {
   const chipTitle = next
     ? [
         nextTitle,
+        episodeTag(next, t),
         countdown(next.airingAt, t),
         t('chipScope'),
         more ? t('chipMoreHint', more, CHIP_COMING_HOURS) : ''
@@ -3747,6 +3757,10 @@ function NextChip() {
             // Named, not just counted down to. Truncation is inline because the
             // compiled Tailwind carries no arbitrary max-width.
             next ? jsx('span', { className: 'truncate', style: { maxWidth: '9rem' }, children: nextTitle }) : null,
+            // Which episode, not only when it lands.
+            next && episodeTag(next, t)
+              ? jsx('span', { className: 'shrink-0 opacity-60', children: episodeTag(next, t) })
+              : null,
             next
               ? jsx('span', {
                   className: cn('shrink-0 font-medium tabular-nums', imminent && 'text-(--ui-text-primary)'),

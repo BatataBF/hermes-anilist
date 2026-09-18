@@ -10,8 +10,9 @@ owner and running mostly on **`deepseek-v4.1-flash`**. The taste, the screenshot
 are human; the code is not.
 
 > **Status: 0.8.0.** The pane, the AniList backend (read *and* write), the pin-flow sign-in, the cron
-> alerts, the daily digest and the two agent tools all work today. Next: the catalog submission
-> (`hermes plugins install hermes-anilist`) — see [Hermes plugin catalog](#hermes-plugin-catalog).
+> alerts, the daily digest and the two agent tools all work today. Next: the catalog PR (which opens
+> once the pinned commit is two weeks old — see [Hermes plugin catalog](#hermes-plugin-catalog)) and the
+> agent's writing tools.
 
 ---
 
@@ -220,10 +221,15 @@ Desktop-half edits hot-reload: save `desktop/plugin.js` and the app picks it up.
 
 ## Hermes plugin catalog
 
-The [plugin catalog](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugin-catalog) is
-the reviewed, SHA-pinned index behind `hermes plugins install <name>`. Admission is a pull request to
-`NousResearch/hermes-agent` adding **one** file, `plugin-catalog/hermes-anilist.yaml`; the checklist is
-in that repo's `plugin-catalog/README.md`:
+**What this section is for:** the catalog is the only reviewed index behind
+`hermes plugins install <name>`, and admission is a pull request to a *different* repository
+(`NousResearch/hermes-agent`) — never to this one. So this section is the submission's checklist with
+where this repo stands, and it is where the entry file lives, ready to copy. Nothing under this repo's
+`plugin-catalog/` directory is read by Hermes at runtime.
+
+The catalog itself is documented at
+[Plugin Catalog](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugin-catalog), and
+the checklist is that repo's `plugin-catalog/README.md`:
 
 | Requirement | Where this repo stands |
 |---|---|
@@ -241,6 +247,10 @@ The entry itself is kept in this repo, ready to copy, at
 `NousResearch/hermes-agent` adding that same path with the file's contents, and paste the validator
 output in the description.
 
+The developer guide also asks standalone plugins to be promoted in the Nous Research Discord
+`#plugins-skills-and-skins` channel — a community plugin is a standalone repo first
+(`~/.hermes/plugins/` or a pip entry point) and a catalog entry second.
+
 Bumping the pin after a release is the same PR with a new `sha` (and the matching `version` label), so
 the diff a reviewer reads is exactly the commit range users would adopt.
 
@@ -255,14 +265,19 @@ the diff a reviewer reads is exactly the commit range users would adopt.
   list read *and* written. (`0.6.0`)
 - [x] **L4 · alerts** — a cron job per show plus the daily digest, both with a destination and a
   delivery channel remembered between them. (`0.7.0`)
-- [x] **L5 · pane, tools and docs** — the show page rebuilt around the next episode, calendar and
-  table; the chip; `anilist_list` + `anilist_show` and their skill. (`0.8.0`)
-- [ ] **L6 · catalog and writing tools** — the catalog entry merged; editing the score (which needs the
-  account's own scale, `User.mediaListOptions.scoreFormat`); and `anilist_mark`, `anilist_remove`,
-  `anilist_airing`, `anilist_stats` and `anilist_recommend` for the agent.
+- [x] **L5 · pane, tools, docs and CI** — the show page rebuilt around the next episode, the calendar
+  and the episode table; the chip that follows your own list; `anilist_list` + `anilist_show` and
+  their skill; the README as a front door; CI on every push; the catalog entry, pinned and ready.
+  (`0.8.0`)
+- [ ] **L6 · catalog and writing tools** — the catalog entry merged (the PR opens once the pin is two
+  weeks old, and each later release is a pin-bump PR); editing the score (which needs the account's own
+  scale, `User.mediaListOptions.scoreFormat`); and `anilist_mark`, `anilist_remove`, `anilist_airing`,
+  `anilist_stats` and `anilist_recommend` for the agent.
 
-What `1.0.0` means here: updating never breaks your settings or your list — a frozen `config_schema`,
-stable backend routes, and the plugin published to the catalog.
+What `1.0.0` means here: updating never breaks your settings or your list — stable backend routes,
+stable tool and manifest names, and a pin in the catalog that moves only through a reviewed PR. There is
+no server-side config schema to freeze: every preference is client-side, in the desktop half's own
+storage, precisely so a future version can add one without migrating anyone.
 
 ## Changelog
 

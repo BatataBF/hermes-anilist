@@ -92,6 +92,7 @@ const STRINGS = {
     chipScope: 'from your list',
     chipMore: (count) => `+${count}`,
     chipMoreHint: (count, hours) => `and ${count} more in the next ${hours}h`,
+    chipAlertArmed: 'alert armed',
     chipNothingAiring: 'nothing of yours airs soon',
     chipNothingTracked: 'no shows tracked',
     chipNothingAiringHint: (days) => `Nothing in your list airs in the next ${days} days.`,
@@ -265,6 +266,7 @@ const STRINGS = {
     chipScope: 'de tu lista',
     chipMore: (count) => `+${count}`,
     chipMoreHint: (count, hours) => `y ${count} más en las próximas ${hours} h`,
+    chipAlertArmed: 'alerta armada',
     chipNothingAiring: 'nada tuyo emite pronto',
     chipNothingTracked: 'sin series seguidas',
     chipNothingAiringHint: (days) => `Nada de tu lista emite en los próximos ${days} días.`,
@@ -3687,6 +3689,7 @@ function NextChip() {
   const t = usePluginI18n(ID)
   const airing = useAiring()
   const tracked = useTracked()
+  const alerts = useAlerts()
   const { titleLanguage, windowDays } = useValue($settings)
   // Controlled so the footer's buttons can close this menu on their way out.
   const [open, setOpen] = useState(false)
@@ -3700,6 +3703,9 @@ function NextChip() {
   // rather than cycling through them, because a status bar that moves on its own
   // is one you cannot read.
   const more = Math.max(0, coming.length - 1)
+  // Whether a reminder is armed for the very episode being counted down to — the
+  // one question about alerts the chip can answer without opening anything.
+  const armed = next ? alertFor(alerts.data, next.id, next.episode) : null
   // A bare countdown says how long, not what for.
   const nextTitle = next ? titleOf(next, titleLanguage) : ''
   // Within the hour the chip stops being a postcard and starts being a notice.
@@ -3718,6 +3724,7 @@ function NextChip() {
         episodeTag(next, t),
         countdown(next.airingAt, t),
         t('chipScope'),
+        armed ? t('chipAlertArmed') : '',
         more ? t('chipMoreHint', more, CHIP_COMING_HOURS) : ''
       ]
         .filter(Boolean)
@@ -3769,6 +3776,9 @@ function NextChip() {
               : empty
                 ? jsx('span', { className: 'truncate opacity-60', children: emptyLabel })
                 : null,
+            // A reminder is armed for this very episode: one bell says so without
+            // opening anything.
+            armed ? jsx(Codicon, { name: 'bell', size: '0.625rem', className: 'shrink-0 opacity-60' }) : null,
             // "One of two" is worth saying; cycling between them is not.
             more
               ? jsx('span', { className: 'shrink-0 opacity-60', children: t('chipMore', more) })

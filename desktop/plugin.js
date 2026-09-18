@@ -24,6 +24,11 @@ import {
   Button,
   Codicon,
   ConfirmDialog,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
   EmptyState,
   ErrorState,
   Input,
@@ -93,6 +98,8 @@ const STRINGS = {
     chipMore: (count) => `+${count}`,
     chipMoreHint: (count, hours) => `and ${count} more in the next ${hours}h`,
     chipAlertArmed: 'alert armed',
+    menuOpenShow: 'Open the show page',
+    menuRefresh: 'Refresh now',
     chipNothingAiring: 'nothing of yours airs soon',
     chipNothingTracked: 'no shows tracked',
     chipNothingAiringHint: (days) => `Nothing in your list airs in the next ${days} days.`,
@@ -267,6 +274,8 @@ const STRINGS = {
     chipMore: (count) => `+${count}`,
     chipMoreHint: (count, hours) => `y ${count} más en las próximas ${hours} h`,
     chipAlertArmed: 'alerta armada',
+    menuOpenShow: 'Abrir la ficha',
+    menuRefresh: 'Actualizar ahora',
     chipNothingAiring: 'nada tuyo emite pronto',
     chipNothingTracked: 'sin series seguidas',
     chipNothingAiringHint: (days) => `Nada de tu lista emite en los próximos ${days} días.`,
@@ -3733,58 +3742,132 @@ function NextChip() {
       ? emptyHint
       : t('chipLabel')
 
+  // The chip's face, as one element: a left click opens the panel and a right
+  // click opens the menu, and Radix's Slots compose both onto the same node.
+  const chipButton = jsx('button', {
+    type: 'button',
+    // The hover text carries the scope too: "whose show is this" is the one thing
+    // about the chip that is invisible at a glance.
+    title: chipTitle,
+    className: cn(
+      'inline-flex h-full items-center gap-1.5 px-1.5 text-[0.6875rem] transition-colors',
+      'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
+    ),
+    onClick: () => haptic('tap'),
+    children: [
+      // The bar's other items are plain words; this one carries a time, so it
+      // wears an icon and keeps that time the brightest mark in the chip.
+      jsx(Codicon, {
+        name: chipIcon(next && next.airingAt),
+        size: '0.75rem',
+        className: cn('shrink-0', imminent && 'text-(--ui-text-primary)')
+      }),
+      jsx('span', {
+        className: 'text-[0.625rem] uppercase tracking-wide opacity-60',
+        children: 'anilist'
+      }),
+      // Named, not just counted down to. Truncation is inline because the compiled
+      // Tailwind carries no arbitrary max-width.
+      next ? jsx('span', { className: 'truncate', style: { maxWidth: '9rem' }, children: nextTitle }) : null,
+      // Which episode, not only when it lands.
+      next && episodeTag(next, t)
+        ? jsx('span', { className: 'shrink-0 opacity-60', children: episodeTag(next, t) })
+        : null,
+      next
+        ? jsx('span', {
+            className: cn('shrink-0 font-medium tabular-nums', imminent && 'text-(--ui-text-primary)'),
+            children: countdown(next.airingAt, t)
+          })
+        : empty
+          ? jsx('span', { className: 'truncate opacity-60', children: emptyLabel })
+          : null,
+      // A reminder is armed for this very episode: one bell says so without
+      // opening anything.
+      armed ? jsx(Codicon, { name: 'bell', size: '0.625rem', className: 'shrink-0 opacity-60' }) : null,
+      // "One of two" is worth saying; cycling between them is not.
+      more ? jsx('span', { className: 'shrink-0 opacity-60', children: t('chipMore', more) }) : null
+    ]
+  })
+
+  const openNextShow = () => {
+    haptic('tap')
+    setOpen(false)
+    if (next && openDetail(next.id)) return
+    host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
+  }
+
+  const openNextOnAniList = () => {
+    haptic('tap')
+    setOpen(false)
+    if (next && osDoor) void osDoor.openExternal(`https://anilist.co/anime/${next.id}`)
+  }
+
+  const refreshNow = () => {
+    haptic('tap')
+    setOpen(false)
+    void queryClient.invalidateQueries({ queryKey: [SOURCE] })
+    host.notify({ kind: 'info', message: t('refreshed') })
+  }
+
   return jsx(Popover, {
     open,
     onOpenChange: (nextOpen) => setOpen(nextOpen),
     children: [
-      jsx(PopoverTrigger, {
-        asChild: true,
-        children: jsx('button', {
-          type: 'button',
-          // The hover text carries the scope too: "whose show is this" is the one
-          // thing about the chip that is invisible at a glance.
-          title: chipTitle,
-          className: cn(
-            'inline-flex h-full items-center gap-1.5 px-1.5 text-[0.6875rem] transition-colors',
-            'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
-          ),
-          onClick: () => haptic('tap'),
-          children: [
-            // The bar's other items are plain words; this one carries a time, so it
-            // wears an icon and keeps that time the brightest mark in the chip.
-            jsx(Codicon, {
-              name: chipIcon(next && next.airingAt),
-              size: '0.75rem',
-              className: cn('shrink-0', imminent && 'text-(--ui-text-primary)')
-            }),
-            jsx('span', {
-              className: 'text-[0.625rem] uppercase tracking-wide opacity-60',
-              children: 'anilist'
-            }),
-            // Named, not just counted down to. Truncation is inline because the
-            // compiled Tailwind carries no arbitrary max-width.
-            next ? jsx('span', { className: 'truncate', style: { maxWidth: '9rem' }, children: nextTitle }) : null,
-            // Which episode, not only when it lands.
-            next && episodeTag(next, t)
-              ? jsx('span', { className: 'shrink-0 opacity-60', children: episodeTag(next, t) })
-              : null,
-            next
-              ? jsx('span', {
-                  className: cn('shrink-0 font-medium tabular-nums', imminent && 'text-(--ui-text-primary)'),
-                  children: countdown(next.airingAt, t)
-                })
-              : empty
-                ? jsx('span', { className: 'truncate opacity-60', children: emptyLabel })
+      // Right-click is where a status item's actions belong — the app's own items
+      // open a menu there — and a left click still opens the panel.
+      jsxs(ContextMenu, {
+        children: [
+          jsx(ContextMenuTrigger, {
+            asChild: true,
+            children: jsx(PopoverTrigger, { asChild: true, children: chipButton })
+          }),
+          jsxs(ContextMenuContent, {
+            className: 'min-w-52',
+            // The bar sits at the bottom of the window: keep the menu clear of it.
+            collisionPadding: { bottom: 44, left: 8, right: 8, top: 8 },
+            onCloseAutoFocus: (event) => event.preventDefault(),
+            children: [
+              // The show-specific actions need a show to act on.
+              next
+                ? jsx(ContextMenuItem, {
+                    onSelect: openNextShow,
+                    children: [
+                      jsx(Codicon, { name: 'arrow-right', size: '0.875rem' }, 'icon'),
+                      jsx('span', { children: t('menuOpenShow') }, 'label')
+                    ]
+                  })
                 : null,
-            // A reminder is armed for this very episode: one bell says so without
-            // opening anything.
-            armed ? jsx(Codicon, { name: 'bell', size: '0.625rem', className: 'shrink-0 opacity-60' }) : null,
-            // "One of two" is worth saying; cycling between them is not.
-            more
-              ? jsx('span', { className: 'shrink-0 opacity-60', children: t('chipMore', more) })
-              : null
-          ]
-        })
+              next
+                ? jsx(ContextMenuItem, {
+                    onSelect: openNextOnAniList,
+                    children: [
+                      jsx(Codicon, { name: 'link-external', size: '0.875rem' }, 'icon'),
+                      jsx('span', { children: t('openOnAniList') }, 'label')
+                    ]
+                  })
+                : null,
+              next ? jsx(ContextMenuSeparator, {}) : null,
+              jsx(ContextMenuItem, {
+                onSelect: refreshNow,
+                children: [
+                  jsx(Codicon, { name: 'refresh', size: '0.875rem' }, 'icon'),
+                  jsx('span', { children: t('menuRefresh') }, 'label')
+                ]
+              }),
+              jsx(ContextMenuItem, {
+                onSelect: () => {
+                  haptic('tap')
+                  setOpen(false)
+                  openWorkspaceOrSay('settings')
+                },
+                children: [
+                  jsx(Codicon, { name: 'settings-gear', size: '0.875rem' }, 'icon'),
+                  jsx('span', { children: t('openSettings') }, 'label')
+                ]
+              })
+            ]
+          })
+        ]
       }),
       jsx(PopoverContent, {
         align: 'end',

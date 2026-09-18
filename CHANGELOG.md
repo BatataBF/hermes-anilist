@@ -16,6 +16,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   own column, past episodes receding, the next one named.
 - `tools/class_audit.mjs`: every `className` in `desktop/plugin.js` checked against the installed
   app's compiled stylesheet. A class the build never emitted renders as nothing, silently.
+- **The chip says which episode it counts down to** — `EP 12/12` when AniList has published the
+  show's length, `EP 12` when it has not — and a small bell appears once a reminder is armed for
+  that very episode, which is the one question about alerts the chip can answer without opening
+  anything.
+- **Right-click on the chip opens a menu**: the show's page, the show on AniList, *Refresh now*, and
+  Settings. Left-click still opens the panel; the show-specific items are absent when there is no
+  episode to talk about.
 
 ### Changed
 

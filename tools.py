@@ -150,13 +150,23 @@ def _entry_row(entry: Dict[str, Any]) -> Dict[str, Any]:
         "totalEpisodes": entry.get("totalEpisodes"),
         "score": entry.get("score"),
         "format": entry.get("format"),
+        # Season and year come from the account list only; the device's own list
+        # never stored them, so they stay absent rather than guessed.
+        "season": entry.get("season"),
+        "seasonYear": entry.get("seasonYear"),
         "nextEpisode": entry.get("nextEpisode"),
         "airingAt": entry.get("airingAt"),
         "url": entry.get("siteUrl") or f"https://anilist.co/anime/{entry.get('id')}",
     }
 
 
-async def _handle_list(args: Dict[str, Any]) -> str:
+async def _handle_list(args: Dict[str, Any], **kw) -> str:
+    """The list the reader tracks, narrowed and joined with the airing window.
+
+    ``**kw`` is not decoration: the tool dispatcher forwards context it knows
+    (``task_id``, ``session_id``) to every handler, and a signature that refuses
+    them fails at call time with a TypeError the model reads as a broken tool.
+    """
     routes = _routes()
     if routes is None:
         return _error(_NO_BACKEND)
@@ -214,7 +224,9 @@ ANILIST_LIST_SCHEMA = {
         "Read the anime list this reader tracks: their AniList account's list when they are signed "
         "in, this device's own list otherwise (the answer names which one it was). Each row carries "
         "status, progress, the show's total episodes, the reader's score and — when it is still "
-        "airing — the next episode and when it lands. Use filter='airing' for 'what of mine airs', "
+        "airing — the next episode and when it lands. Each row also carries the show's season and "
+        "season year when AniList knows them, which is how 'what am I watching this season' is "
+        "answered exactly. Use filter='airing' for 'what of mine airs', "
         "filter='behind' for shows whose next episode is past what they have watched, "
         "filter='not_started' for tracked shows with nothing watched yet."
     ),
@@ -269,7 +281,12 @@ def _relation_row(relation: Dict[str, Any], tracked: set) -> Dict[str, Any]:
     }
 
 
-async def _handle_show(args: Dict[str, Any]) -> str:
+async def _handle_show(args: Dict[str, Any], **kw) -> str:
+    """One show, with the reader's own entry and its neighbours in the catalogue.
+
+    ``**kw`` carries the dispatcher's context (``task_id``, ``session_id``); a
+    handler that refuses it fails before it can answer anything.
+    """
     routes = _routes()
     if routes is None:
         return _error(_NO_BACKEND)

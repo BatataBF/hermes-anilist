@@ -428,6 +428,10 @@ def _list_entry(node: Dict[str, Any]) -> Dict[str, Any]:
         "cover": (media.get("coverImage") or {}).get("medium"),
         "format": media.get("format"),
         "totalEpisodes": media.get("episodes"),
+        # Which broadcast season it belongs to: "what am I watching this season"
+        # is a question about the calendar, not about progress.
+        "season": media.get("season"),
+        "seasonYear": media.get("seasonYear"),
         "siteUrl": media.get("siteUrl"),
     }
 
@@ -822,6 +826,8 @@ query ($userId: Int) {
           title { romaji english native }
           episodes
           format
+          season
+          seasonYear
           coverImage { medium }
           siteUrl
         }

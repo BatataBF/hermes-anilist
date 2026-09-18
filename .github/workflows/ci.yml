@@ -1,0 +1,53 @@
+name: CI
+
+# What a contributor (and the catalog reviewer) can reproduce locally:
+#   hermes plugins validate .        ← the same validator this workflow runs
+#   uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q
+#   node tools/test_plugin_helpers.mjs && node tools/i18n_audit.mjs desktop/plugin.js
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The catalog's admission gate: the manifest schema, and declared-vs-actually
+  # -registered capabilities. `hermes plugins validate` loads the plugin in a
+  # scratch subprocess, so a tool declared in plugin.yaml but never registered
+  # (or registered but never declared) fails here instead of in the catalog PR.
+  validate:
+    name: hermes plugins validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: NousResearch/hermes-agent/.github/actions/plugin-validate@main
+        with:
+          path: .
+          # Validate against the oldest Hermes this plugin claims to support, so
+          # `requires_hermes` in plugin.yaml stays honest.
+          hermes-ref: main
+
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # The backend half: offline, no network, payloads trimmed from real
+      # AniList responses.
+      - name: pytest
+        run: |
+          pip install --quiet pytest httpx fastapi
+          pytest tests/ -q
+
+      # The desktop half's pure helpers and i18n parity (Node is on the runner).
+      - name: Desktop half — helpers and locale parity
+        run: |
+          node tools/test_plugin_helpers.mjs
+          node tools/i18n_audit.mjs desktop/plugin.js

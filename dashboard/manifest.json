@@ -1,7 +1,7 @@
 {
   "name": "hermes-anilist",
   "label": "AniList",
-  "description": "Airing tracker and season browser for the Hermes Desktop UI.",
+  "description": "Airing tracker, season browser and your AniList list — with episode alerts and agent tools.",
   "icon": "Activity",
   "api": "plugin_api.py"
 }

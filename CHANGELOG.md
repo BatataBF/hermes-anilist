@@ -6,8 +6,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-17
+
 ### Added
 
+- **A list row knows which season a show belongs to.** The account list's own `season` and
+  `seasonYear` ride along, so "what am I watching this season" is answered exactly instead of by
+  approximation (a show that airs this week is *probably* this season's). The device's own list never
+  stored them, so those rows leave the fields out rather than guessing.
+- **The catalog entry, ready to submit.** `plugin-catalog/hermes-anilist.yaml` holds the
+  `NousResearch/hermes-agent` entry verbatim — reviewed, SHA-pinned, `tier: community`,
+  `category: desktop` — with the release commit as the only thing that ever moves, so a pin bump is the
+  same file with a new `sha` and a new `version`.
+- **CI on every push and pull request**: `hermes plugins validate` through the same reusable action the
+  catalog's admission runs, the offline backend suite, and the desktop half's helper and locale checks.
 - **The schedule as a calendar.** A show's page carries a month grid of its air dates now: the days
   that air are marked, the next one is filled and names its episode, the arrows stop where the
   schedule does, and the day you pick lists what lands on it. All of it in your own timezone —
@@ -39,6 +51,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Changed
 
+- **The README is the plugin's front door now**: what it can do by surface, the three install routes,
+  the AniList account walkthrough step by step (with the redirect URL AniList compares literally), the
+  agent tools and the rules that make them trustworthy, and the catalog checklist with where this repo
+  stands on each line.
 - **The status-bar chip follows *your* list, not the whole schedule.** The episode it shows is the
   earliest one among the shows you track — your AniList list when you are signed in, this device's own
   list when you are not, one rule either way, and the minute-by-minute refresh it already had rolls it
@@ -63,6 +79,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   stays in the workspace's Catalog tab and in the command palette.
 
 ### Fixed
+
+- **The agent tools take the context Hermes' dispatcher forwards.** The first real question asked of
+  `anilist_list` came back as `TypeError: _handle_list() got an unexpected keyword argument 'task_id'`:
+  `model_tools.py` passes `task_id` and `session_id` to *every* tool call, and a handler that declares
+  only its arguments dies before it can read anything. Both handlers accept them now, and a test
+  registers the plugin the way the loader does and calls every registered handler with that context, so
+  the bug class cannot return in a third tool.
 
 ## [0.7.0] - 2026-09-17
 

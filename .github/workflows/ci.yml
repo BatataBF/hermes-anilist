@@ -19,17 +19,47 @@ jobs:
   # -registered capabilities. `hermes plugins validate` loads the plugin in a
   # scratch subprocess, so a tool declared in plugin.yaml but never registered
   # (or registered but never declared) fails here instead of in the catalog PR.
+  #
+  # It does NOT use NousResearch/hermes-agent/.github/actions/plugin-validate:
+  # that action installs Hermes with `pip install git+…`, and Hermes' setup.py
+  # refuses to build a wheel outside a Nix build ("Hermes is distributed via the
+  # shell installer, Docker image, or Nix"), so the action cannot succeed against
+  # any current ref — verified against main, where it died with "Failed building
+  # wheel for hermes-agent". An editable install from a checkout is the path
+  # Hermes documents for development, and it is what the steps below do.
   validate:
     name: hermes plugins validate
     runs-on: ubuntu-latest
+    env:
+      # Which Hermes to validate against. `main` keeps `requires_hermes: ">=0.21"`
+      # honest; pin a tag here if upstream ever breaks mid-cycle.
+      HERMES_REF: main
     steps:
       - uses: actions/checkout@v5
-      - uses: NousResearch/hermes-agent/.github/actions/plugin-validate@main
+      - uses: actions/setup-python@v6
         with:
-          path: .
-          # Validate against the oldest Hermes this plugin claims to support, so
-          # `requires_hermes` in plugin.yaml stays honest.
-          hermes-ref: main
+          python-version: "3.11"
+
+      - name: Install uv
+        run: python -m pip install --quiet uv
+
+      - name: Check out Hermes (${{ env.HERMES_REF }})
+        run: |
+          git clone --quiet --filter=blob:none --depth 1 \
+            --branch "$HERMES_REF" \
+            https://github.com/NousResearch/hermes-agent "$RUNNER_TEMP/hermes-agent"
+
+      # Editable, because a wheel build is refused by design. `--no-dev` skips
+      # the test-only dependencies this job never runs.
+      - name: Install Hermes
+        working-directory: ${{ runner.temp }}/hermes-agent
+        run: uv sync --no-dev
+
+      - name: Validate
+        run: |
+          HERMES="$RUNNER_TEMP/hermes-agent/.venv/bin/hermes"
+          "$HERMES" plugins validate "$GITHUB_WORKSPACE"
+          "$HERMES" plugins doctor "$GITHUB_WORKSPACE" --ci
 
   tests:
     name: tests (py${{ matrix.python-version }})

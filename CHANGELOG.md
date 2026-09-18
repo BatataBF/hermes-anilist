@@ -44,6 +44,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Fixed
 
+- **CI's validator job could never pass.** `hermes plugins validate` ran through the upstream reusable
+  action `NousResearch/hermes-agent/.github/actions/plugin-validate`, whose install step is
+  `pip install git+https://github.com/NousResearch/hermes-agent@<ref>` — and Hermes' `setup.py` refuses to
+  build a wheel outside a Nix build (`HERMES_NIX_BUILD=1`), so every run since the workflow landed died in
+  `Failed building wheel for hermes-agent`. The job now checks out Hermes, installs it editably with
+  `uv sync --no-dev`, and runs `validate` plus `doctor --ci` from that venv, with a comment saying why so
+  the action does not come back. The `tests` job was green throughout.
 - Lint findings the new rules surfaced: a stale `# noqa` on five handlers whose excepts are deliberately
   blind (they now carry a `BLE001` directive *and* the reason), two un-sorted import blocks, one
   `open()` without a context manager, and a shebang on a file nobody could execute. The explanatory

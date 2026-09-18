@@ -51,6 +51,13 @@ The renderer never holds a credential: it only ever sees public data and a `conf
 - **A per-show detail**: cover, format, status, length, duration, score, studio, genres, the next
   episode's countdown, the full description, the episode list, and the tracking controls (status,
   progress ±, remove).
+- **Agent tools** (opt-in with the plugin): `anilist_list` reads the list you actually track — with
+  `filter: airing | behind | not_started` — and `anilist_show` answers about one anime with what the
+  pane never showed: AniList's score and rankings with their context, spoiler-free tags, the score
+  distribution, related works (each flagged with whether it is already in your list) and the
+  community's recommendations. Every answer names which list it read (your AniList account, or this
+  device's), and `anilist_show` resolves a title and tells you which show it resolved to. The plugin
+  ships the skill that teaches the model the rules — `skill_view('hermes-anilist:usage')`.
 - **Settings** (client-side, per install): title language (English / Romaji / Original), feed window,
   the filter it opens on, and whether rows show cover art.
 - English and Spanish, following the app's language.
@@ -99,6 +106,10 @@ Desktop pane (renderer)          Backend (gateway/serve process)        AniList
 
 - All network access happens in the backend half, so the 30 req/min budget is spent once per host
   and not once per window.
+- The agent's tools live in `tools.py` and read through the same functions the routes do
+  (`read_entries`, `read_show`, `read_airing`, `read_search` in `dashboard/plugin_api.py`) — one
+  pooled HTTP client, one cache, one answer to "which store is answering". `hermes plugins validate`
+  compares the tools declared in `plugin.yaml` against the ones `register(ctx)` actually registers.
 - The pane declares the source it is reading from (`connection · profile`), because a Hermes desktop
   can be connected to several gateways and profiles at once.
 - Polling is the primary refresh path (`ctx.socket` is a no-op against OAuth remotes).

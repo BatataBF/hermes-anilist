@@ -1,6 +1,6 @@
 name: hermes-anilist
 version: 0.7.0
-description: "AniList tracker for Hermes Desktop — airing countdowns, season browsing and episode alerts in a status-bar popover."
+description: "AniList tracker for Hermes Desktop — airing countdowns, season browsing and episode alerts in a status-bar popover, plus agent tools for reading your own list."
 author: BatataBF
 license: MIT
 homepage: https://github.com/BatataBF/hermes-anilist
@@ -19,6 +19,13 @@ tags:
   - anime
   - anilist
   - tracker
+# The agent's tools, by NAME — the loader derives the toolset from these.
+# Registration lives in tools.py (called from register(ctx) in __init__.py), and
+# `hermes plugins validate` fails when this list and that registration disagree,
+# so the two move together or not at all.
+provides_tools:
+  - anilist_list
+  - anilist_show
 python_dependencies:
   # Resolved together with Hermes' own ranges and installed into the venv by
   # `hermes plugins install` / `enable`; re-applied after `hermes update`.

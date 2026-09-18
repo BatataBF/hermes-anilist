@@ -16,6 +16,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   own column, past episodes receding, the next one named.
 - `tools/class_audit.mjs`: every `className` in `desktop/plugin.js` checked against the installed
   app's compiled stylesheet. A class the build never emitted renders as nothing, silently.
+- **Agent tools: `anilist_list` and `anilist_show`.** The model can read the list you actually track
+  — with `filter: airing | behind | not_started`, each row carrying status, progress, the next
+  episode and its air time — and ask about one anime: AniList's score (0-100, `null` when there is
+  none), its all-time rankings *with their context*, spoiler-free tags, the score distribution,
+  related works in story order (each flagged with whether it is already in your list) and the
+  community's recommendations with their vote counts. A title resolves itself and the answer says
+  which show it resolved to. Both tools name the list they read: your AniList account's, or this
+  device's when you are signed out.
+- **A bundled skill** (`skills/usage/SKILL.md`, registered as `hermes-anilist:usage`) that teaches the
+  model the map from question to tool and the honesty rules — no scores from memory, `null` is not
+  zero, a tag list is not a plot summary, and nothing in these two tools writes.
+- The show detail now carries what an agent asks and the pane never did: relations, recommendations,
+  rankings, tags, favourites and the score spread, in the same `/anime/{id}` response the pane reads.
 - **The chip says which episode it counts down to** — `EP 12/12` when AniList has published the
   show's length, `EP 12` when it has not — and a small bell appears once a reminder is armed for
   that very episode, which is the one question about alerts the chip can answer without opening

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +30,55 @@ PLUGIN_ID = "hermes-anilist"
 # (``hermes_dashboard_plugin_<name>`` from the manifest's name).
 ROUTES_MODULE = f"hermes_dashboard_plugin_{PLUGIN_ID}"
 
+# The skill the agent loads for the how-and-when of the tools: not in
+# ``~/.hermes/skills/`` and not in ``<available_skills>``, so the tool
+# descriptions are where it gets named.
+SKILL_NAME = "usage"
+SKILL_PATH = "skills/usage/SKILL.md"
+
 
 def register(ctx) -> None:
     """Wire the plugin's agent-side contributions. Called once at startup."""
-    logger.debug("%s: register(ctx) called (no agent-side contributions yet)", PLUGIN_ID)
+    logger.debug("%s: register(ctx) called", PLUGIN_ID)
     _bind_plugin_state(ctx)
+    _register_tools(ctx)
+    _register_skill(ctx)
+
+
+def _register_tools(ctx) -> None:
+    """The agent's AniList tools. Declared in ``provides_tools``, so registration and
+    declaration must move together (``hermes plugins validate`` compares them)."""
+    try:
+        from .tools import register_tools
+    except Exception:  # noqa: BLE001 - a broken import must not disable the whole plugin
+        logger.warning("%s: tools.py could not be imported; agent tools unavailable", PLUGIN_ID, exc_info=True)
+
+        return
+
+    register_tools(ctx)
+
+
+def _register_skill(ctx) -> None:
+    """The skill that teaches when to reach for those tools. Read-only, explicit-load."""
+    path = Path(__file__).resolve().parent / SKILL_PATH
+    if not path.is_file():
+        logger.debug("%s: no %s; skipping skill registration", PLUGIN_ID, SKILL_PATH)
+
+        return
+
+    try:
+        ctx.register_skill(
+            SKILL_NAME,
+            path,
+            description=(
+                "How and when to use the hermes-anilist agent tools: reading the reader's own list, "
+                "answering 'is it good', finding sequels they are missing, and the rules that keep "
+                "writes safe."
+            ),
+            frontmatter={"name": SKILL_NAME, "description": "AniList tools: lists, shows, and the honesty rules"},
+        )
+    except Exception:  # noqa: BLE001 - a skill is a nicety, not the feature
+        logger.warning("%s: skill %s could not be registered", PLUGIN_ID, SKILL_NAME, exc_info=True)
 
 
 def _bind_plugin_state(ctx) -> None:

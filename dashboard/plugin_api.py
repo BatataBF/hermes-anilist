@@ -252,8 +252,11 @@ query ($from: Int, $to: Int, $perPage: Int) {
 }
 """
 
-# One show, everything the detail pane shows. `asHtml: false` keeps the
-# description as text (AniList still leaves the odd `<br>` in, stripped below).
+# One show, everything the detail pane shows — plus what an agent asks and the
+# pane never did: the catalogue it sits next to (relations), what the community
+# pairs it with, where it ranks, what its tags are and how its scores spread.
+# `asHtml: false` keeps the description as text (AniList still leaves the odd
+# `<br>` in, stripped below).
 _DETAIL_QUERY = """
 query ($id: Int, $page: Int, $perPage: Int) {
   Media(id: $id, type: ANIME) {
@@ -269,11 +272,45 @@ query ($id: Int, $page: Int, $perPage: Int) {
     genres
     averageScore
     popularity
+    favourites
     season
     seasonYear
     siteUrl
     studios(isMain: true) { nodes { name } }
     nextAiringEpisode { episode airingAt timeUntilAiring }
+    rankings { rank type context }
+    tags { name rank isGeneralSpoiler }
+    stats { scoreDistribution { score amount } }
+    relations {
+      edges {
+        relationType
+        node {
+          id
+          title { romaji english native }
+          coverImage { medium }
+          format
+          status
+          episodes
+          averageScore
+          seasonYear
+          siteUrl
+        }
+      }
+    }
+    recommendations(sort: RATING_DESC, perPage: 6) {
+      nodes {
+        rating
+        mediaRecommendation {
+          id
+          title { romaji english native }
+          coverImage { medium }
+          format
+          averageScore
+          seasonYear
+          siteUrl
+        }
+      }
+    }
     airingSchedule(page: $page, perPage: $perPage) {
       pageInfo { total currentPage lastPage hasNextPage }
       nodes { episode airingAt timeUntilAiring }
@@ -464,8 +501,132 @@ def normalize_schedule(schedule: Dict[str, Any]) -> List[Dict[str, Any]]:
     return episodes
 
 
+# The order a story reads in, not the order AniList returns relations in: what
+# comes next first, then what came before, then the side material.
+RELATION_ORDER = (
+    "SEQUEL",
+    "PREQUEL",
+    "SIDE_STORY",
+    "SPIN_OFF",
+    "ALTERNATIVE",
+    "SUMMARY",
+    "ADAPTATION",
+    "CHARACTER",
+    "OTHER",
+)
+
+
+def _relation_rank(relation: Optional[str]) -> int:
+    try:
+        return RELATION_ORDER.index(relation or "")
+    except ValueError:
+        return len(RELATION_ORDER)
+
+
+def normalize_relations(media: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Every relative AniList files for a show, in the order a story reads.
+
+    A relation edge with no node is AniList saying "related to something it will
+    not name"; it is not a row.
+    """
+    edges = (media.get("relations") or {}).get("edges") or []
+    items: List[Dict[str, Any]] = []
+
+    for edge in edges:
+        node = edge.get("node") or {}
+        media_id = node.get("id")
+        if not media_id:
+            continue
+        items.append(
+            {
+                "relation": edge.get("relationType"),
+                "id": media_id,
+                "title": _title(node),
+                "titles": _title_parts(node),
+                "cover": (node.get("coverImage") or {}).get("medium"),
+                "format": node.get("format"),
+                "status": node.get("status"),
+                "episodes": node.get("episodes"),
+                "score": node.get("averageScore"),
+                "seasonYear": node.get("seasonYear"),
+                "url": node.get("siteUrl") or f"https://anilist.co/anime/{media_id}",
+            }
+        )
+
+    items.sort(key=lambda item: (_relation_rank(item.get("relation")), -(item.get("seasonYear") or 0)))
+
+    return items
+
+
+def normalize_tags(media: Dict[str, Any], limit: int = 12) -> List[Dict[str, Any]]:
+    """The show's tags, heaviest first, with the general spoilers left out.
+
+    ``rank`` is how central a tag is to the work; a tag AniList itself flags as a
+    general spoiler is not a description to hand over unasked.
+    """
+    tags = [tag for tag in (media.get("tags") or []) if not tag.get("isGeneralSpoiler")]
+    tags.sort(key=lambda tag: tag.get("rank") or 0, reverse=True)
+
+    return [{"name": tag.get("name"), "rank": tag.get("rank")} for tag in tags[: max(0, limit)]]
+
+
+def normalize_rankings(media: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The show's placements, context included — a rank without context says nothing."""
+    return [
+        {"rank": item.get("rank"), "type": item.get("type"), "context": item.get("context")}
+        for item in (media.get("rankings") or [])
+        if item.get("rank")
+    ]
+
+
+def normalize_recommendations(media: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """What the community pairs with this show, most-voted first.
+
+    ``rating`` is how many people made the pairing, which is the only signal
+    behind a community recommendation.
+    """
+    nodes = (media.get("recommendations") or {}).get("nodes") or []
+    items: List[Dict[str, Any]] = []
+
+    for node in nodes:
+        related = node.get("mediaRecommendation") or {}
+        media_id = related.get("id")
+        if not media_id:
+            continue
+        items.append(
+            {
+                "id": media_id,
+                "title": _title(related),
+                "titles": _title_parts(related),
+                "cover": (related.get("coverImage") or {}).get("medium"),
+                "format": related.get("format"),
+                "score": related.get("averageScore"),
+                "seasonYear": related.get("seasonYear"),
+                "votes": node.get("rating"),
+                "url": related.get("siteUrl") or f"https://anilist.co/anime/{media_id}",
+            }
+        )
+
+    items.sort(key=lambda item: item.get("votes") or 0, reverse=True)
+
+    return items
+
+
+def normalize_score_distribution(media: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """How the scores spread, low to high — a shape a mean cannot show."""
+    points = (media.get("stats") or {}).get("scoreDistribution") or []
+    items = [
+        {"score": point.get("score"), "amount": point.get("amount") or 0}
+        for point in points
+        if point.get("score") is not None
+    ]
+    items.sort(key=lambda point: point["score"])
+
+    return items
+
+
 def normalize_detail(data: Dict[str, Any]) -> Dict[str, Any]:
-    """A single show, shaped for the detail pane."""
+    """A single show, shaped for the detail pane — and for the agent asking about it."""
     media = data.get("Media") or {}
     schedule = media.get("airingSchedule") or {}
     next_airing = media.get("nextAiringEpisode") or {}
@@ -486,6 +647,12 @@ def normalize_detail(data: Dict[str, Any]) -> Dict[str, Any]:
         "genres": media.get("genres") or [],
         "score": media.get("averageScore"),
         "popularity": media.get("popularity"),
+        "favourites": media.get("favourites"),
+        "rankings": normalize_rankings(media),
+        "tags": normalize_tags(media),
+        "relations": normalize_relations(media),
+        "recommendations": normalize_recommendations(media),
+        "scoreDistribution": normalize_score_distribution(media),
         "season": media.get("season"),
         "seasonYear": media.get("seasonYear"),
         "url": media.get("siteUrl"),
@@ -954,6 +1121,116 @@ async def list_delete(media_id: int = Path(..., ge=1)) -> Dict[str, Any]:
     return {"id": media_id, "deleted": deleted}
 
 
+# ─── reads the agent half shares with the routes ─────────────────────────────
+#
+# The agent's tools call these instead of a second copy of "which store answers,
+# which cache key, which shape": the pane and the agent read the same functions,
+# so they cannot drift into telling the reader two different things.
+
+
+def _local_entries() -> List[Dict[str, Any]]:
+    """This device's list, most recently tracked first — the order ``/watchlist`` answers in."""
+    return sorted(_watchlist().values(), key=lambda entry: entry.get("addedAt") or 0, reverse=True)
+
+
+async def read_entries() -> Dict[str, Any]:
+    """Everything the reader tracks, and which store answered.
+
+    The store choice is the one the desktop half makes in the client: a signed-in
+    account answers, this device's own list answers when nobody is. A token that
+    stopped working is not an error here — it degrades to the local list with
+    ``reason`` naming it, exactly as ``/list`` already does.
+    """
+    token = read_token()
+    if not token:
+        return {"store": "local", "connected": False, "entries": _local_entries()}
+
+    try:
+        listing = await _read_list(token)
+    except HTTPException as exc:
+        if exc.status_code != 401:
+            raise
+
+        return {"store": "local", "connected": False, "reason": "invalid", "entries": _local_entries()}
+
+    return {"store": "anilist", "connected": True, "entries": listing.get("entries") or []}
+
+
+async def read_show(media_id: int, episodes: int = 12) -> Dict[str, Any]:
+    """One show — the shape the detail pane gets, so the pane and an agent agree."""
+    data = await _cached_graphql(
+        f"anime:{media_id}:{episodes}",
+        MEDIA_CACHE_TTL_SECONDS,
+        _DETAIL_QUERY,
+        {"id": media_id, "page": 1, "perPage": episodes},
+    )
+
+    return normalize_detail(data)
+
+
+async def read_airing(days: int = 7, per_page: int = AIRING_PAGE_SIZE, after: Optional[int] = None) -> Dict[str, Any]:
+    """The window of episodes about to air, from the cache the pane reads."""
+    # The cursor, not the wall clock, keys the cache: a stale cursor and a live
+    # one are different answers, but the same cursor one second later is not.
+    cache_key = f"airing:{days}:{per_page}:{'head' if after is None else after}"
+
+    return normalize_airing(await _cached(cache_key, AIRING_CACHE_TTL_SECONDS, lambda: _airing_window(days, per_page, after)))
+
+
+async def read_search(term: str, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
+    """Free-text title search — how a name becomes an id."""
+    text = str(term or "").strip()
+    if len(text) < 2:
+        raise HTTPException(status_code=422, detail="q must be at least 2 non-space characters.")
+
+    data = await _cached_graphql(
+        # Case and surrounding whitespace fold into one key: AniList matches
+        # case-insensitively, so "One Piece" and "  one piece " are one request
+        # against the shared budget, not two.
+        f"search:{text.lower()}:{page}:{per_page}",
+        MEDIA_CACHE_TTL_SECONDS,
+        _SEARCH_QUERY,
+        {"search": text, "page": page, "perPage": per_page},
+    )
+
+    return normalize_media_page(data)
+
+
+# How the reader's own list can be narrowed. "Behind" is about the episodes that
+# already landed: a next episode beyond your count means the ones before it went
+# unwatched, which is the question a tracker actually asks.
+ENTRY_FILTERS = ("all", "airing", "behind", "not_started")
+
+
+def filter_entries(
+    entries: List[Dict[str, Any]],
+    wanted: str = "all",
+    airing: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """The reader's list, with its next episode attached, optionally narrowed.
+
+    An unknown filter answers everything rather than nothing: a filter nobody
+    implements must not look like an empty list.
+    """
+    window = {str(item.get("id")): item for item in airing or [] if item.get("id") is not None}
+    rows: List[Dict[str, Any]] = []
+
+    for entry in entries or []:
+        upcoming = window.get(str(entry.get("id"))) or {}
+        rows.append({**entry, "nextEpisode": upcoming.get("episode"), "airingAt": upcoming.get("airingAt")})
+
+    if wanted == "airing":
+        return [row for row in rows if row["airingAt"]]
+
+    if wanted == "behind":
+        return [row for row in rows if row["nextEpisode"] and (row["nextEpisode"] - 1) > (row.get("progress") or 0)]
+
+    if wanted == "not_started":
+        return [row for row in rows if not (row.get("progress") or 0)]
+
+    return rows
+
+
 # ─── routes ──────────────────────────────────────────────────────────────────
 
 
@@ -1011,16 +1288,8 @@ async def search(
     term = q.strip()
     if len(term) < 2:
         raise HTTPException(status_code=422, detail="q must be at least 2 non-space characters.")
-    data = await _cached_graphql(
-        # Case and surrounding whitespace fold into one key: AniList matches
-        # case-insensitively, so "One Piece" and "  one piece " are one request
-        # against the shared budget, not two.
-        f"search:{term.lower()}:{page}:{per_page}",
-        MEDIA_CACHE_TTL_SECONDS,
-        _SEARCH_QUERY,
-        {"search": term, "page": page, "perPage": per_page},
-    )
-    return normalize_media_page(data)
+
+    return await read_search(term, page, per_page)
 
 
 @router.get("/airing")
@@ -1033,11 +1302,7 @@ async def airing(
         description="Unix seconds; return episodes strictly after this moment. Cursor for 'show more'.",
     ),
 ) -> Dict[str, Any]:
-    # The cursor, not the wall clock, keys the cache: a stale cursor and a live
-    # one are different answers, but the same cursor one second later is not.
-    cache_key = f"airing:{days}:{per_page}:{'head' if after is None else after}"
-    data = await _cached(cache_key, AIRING_CACHE_TTL_SECONDS, lambda: _airing_window(days, per_page, after))
-    return normalize_airing(data)
+    return await read_airing(days, per_page, after)
 
 
 # ─── one show ────────────────────────────────────────────────────────────────
@@ -1048,14 +1313,7 @@ async def anime(
     media_id: int = Path(..., ge=1),
     episodes: int = Query(12, ge=1, le=50, description="How many schedule entries ride along with the detail."),
 ) -> Dict[str, Any]:
-    data = await _cached_graphql(
-        f"anime:{media_id}:{episodes}",
-        MEDIA_CACHE_TTL_SECONDS,
-        _DETAIL_QUERY,
-        {"id": media_id, "page": 1, "perPage": episodes},
-    )
-
-    return normalize_detail(data)
+    return await read_show(media_id, episodes)
 
 
 @router.get("/anime/{media_id}/episodes")
@@ -1097,8 +1355,7 @@ class WatchEntry(BaseModel):
 @router.get("/watchlist")
 async def watchlist() -> Dict[str, Any]:
     """Everything being tracked, most recently added first."""
-    entries = _watchlist()
-    items = sorted(entries.values(), key=lambda entry: entry.get("addedAt") or 0, reverse=True)
+    items = _local_entries()
 
     return {"items": items, "count": len(items)}
 

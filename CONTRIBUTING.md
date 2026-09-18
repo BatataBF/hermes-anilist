@@ -70,35 +70,6 @@ One commit per task, imperative subject, the *why* in the body. Releases are del
 in `plugin.yaml`, a `## [x.y.z] - YYYY-MM-DD` section in the changelog and an annotated tag, all in the
 release commit. The catalog pin is bumped after a release, in its own PR (below).
 
-### Attribution — every commit credits the agent
-
-This plugin was written by Hermes Agent, and the git history says so: the last block of every commit
-message is
-
-```
-Co-authored-by: Hermes Agent <noreply@nousresearch.com>
-```
-
-It is a trailer, not prose: GitHub parses `Co-authored-by:` and shows the second author on the commit
-and among the contributors. It goes after one blank line at the end of the message.
-
-Three ways to get it right:
-
-- **By hand**: `git commit` picks up [`.gitmessage`](.gitmessage), which already ends with the trailer.
-  Enable it once per clone: `git config commit.template .gitmessage`.
-- **From a message file** (`git commit -F msg.txt`, which is what an agent does): the template is *not*
-  applied, so append the trailer to the file yourself.
-- **On an existing commit**: don't. Amending or rebasing rewrites the commit id, and the catalog pins
-  the `v0.8.0` release commit by SHA — rewriting it would invalidate a pin that was deliberately made
-  two weeks before submission. Credit goes forward instead; the release commit stays as it is.
-
-The address is deliberately not linked to a GitHub account: the `Hermes` handle there belongs to an
-unrelated project, and `hermes-agent` is an empty account. Swapping the address for
-`<id>+<login>@users.noreply.github.com` of a real account is what gives the co-author an avatar.
-
-The other two places the credit lives: `author:` in `plugin.yaml` (so the catalog card shows it) and the
-first lines of the README.
-
 ## The plugin catalog (maintainer-facing)
 
 The catalog is the only reviewed index behind `hermes plugins install <name>`, and admission is a pull

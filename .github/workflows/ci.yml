@@ -2,6 +2,7 @@ name: CI
 
 # What a contributor (and the catalog reviewer) can reproduce locally:
 #   hermes plugins validate .        ← the same validator this workflow runs
+#   uvx ruff check .                 ← the lint step below
 #   uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q
 #   node tools/test_plugin_helpers.mjs && node tools/i18n_audit.mjs desktop/plugin.js
 on:
@@ -31,20 +32,32 @@ jobs:
           hermes-ref: main
 
   tests:
-    name: tests
+    name: tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The plugin runs inside Hermes' venv; the second row exists so the
+        # source stays installable on the next Python too.
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test tooling
+        run: python -m pip install --quiet --upgrade pip pytest httpx fastapi ruff==0.16.8
+
+      # Bug-focused lint (see ruff.toml): undefined names, unused imports, blind
+      # excepts that carry no reason. Not a style police.
+      - name: Ruff
+        run: ruff check .
 
       # The backend half: offline, no network, payloads trimmed from real
       # AniList responses.
       - name: pytest
-        run: |
-          pip install --quiet pytest httpx fastapi
-          pytest tests/ -q
+        run: pytest tests/ -q
 
       # The desktop half's pure helpers and i18n parity (Node is on the runner).
       - name: Desktop half — helpers and locale parity

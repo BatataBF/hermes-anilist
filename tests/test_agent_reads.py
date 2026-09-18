@@ -16,8 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
 
-import plugin_api  # noqa: E402
-
+import plugin_api
 
 # ─── fixtures: real shapes, trimmed ─────────────────────────────────────────
 

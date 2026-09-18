@@ -1,7 +1,9 @@
 # hermes-anilist
 
 AniList tracker for **Hermes Desktop** — airing countdowns, a season browser, episode alerts and
-agent tools over your own list, without leaving Hermes.
+agent tools over your own list, without leaving Hermes. It is deliberately small in what it asks of
+you: nothing but AniList is contacted, the renderer never holds a credential, every read works signed
+out, and everything that writes — your list, an alert, the digest — is an action you take.
 
 **Built with `@Hermes`.** Every line of this plugin — the desktop half, the backend, the agent tools,
 the tests and this README — was developed with
@@ -77,8 +79,26 @@ Then, in Hermes Desktop:
 Updating, after a new release:
 
 ```bash
-hermes plugins update hermes-anilist
+hermes plugins update hermes-anilist   # pull the release into the installed checkout
 ```
+
+Then restart the backend (Desktop: quit and reopen the app; CLI/gateway: `hermes gateway restart`) —
+both halves register at startup, so a running session keeps the old code until then.
+
+If you want Hermes to replace the directory from the repository instead of pulling into it:
+
+```bash
+hermes plugins install BatataBF/hermes-anilist --force --enable
+hermes gateway restart
+```
+
+`--force` deletes the existing plugin directory first, so back up anything you changed there. If you
+cloned the plugin yourself instead of letting Hermes install it, update that checkout the way you would
+any other (`git pull --ff-only` in the directory) and restart the backend the same way.
+
+Once the catalog entry lands, a catalog install updates differently on purpose: `hermes plugins update`
+never runs `git pull` for it — it compares your installed pin against the current catalog pin and
+force-reinstalls at the reviewed commit.
 
 > **Never install by symlinking a clone into the plugins directory.** The installer resolves the
 > destination and refuses a plugin whose name resolves outside it
@@ -153,6 +173,37 @@ The plugin also ships a skill (`hermes-anilist:usage`, in `skills/usage/SKILL.md
 from question to tool and those honesty rules. Load it with `skill_view('hermes-anilist:usage')`; it is
 not in `~/.hermes/skills/`, so nothing finds it unless a tool description names it.
 
+### The arguments
+
+`anilist_list` — reading the list you track:
+
+```json
+{"filter": "behind", "limit": 20}
+```
+
+| Argument | Values | Meaning |
+|---|---|---|
+| `filter` | `all` · `airing` · `behind` · `not_started` | How to narrow. `behind` = the next episode is past what you have watched |
+| `status` | `watching` · `rewatching` · `planned` · `completed` · `paused` · `dropped` | Only entries in that AniList status |
+| `days` | 1–30 | How far ahead `airing` looks (default 7) |
+| `with_next_episode` | boolean | Attach the next episode even with no filter |
+| `limit` | 1–50 | Rows to return; a truncated answer says `truncated: true` |
+
+`anilist_show` — everything about one show:
+
+```json
+{"title": "frieren", "episodes": 12}
+```
+
+| Argument | Values | Meaning |
+|---|---|---|
+| `title` | 2+ characters | Resolved through AniList search; the answer says which show it picked and what else matched |
+| `id` | AniList id | Skips the search |
+| `episodes` | 1–50 | How many episodes to list (default 12) |
+
+Neither tool writes: `anilist_mark` and `anilist_remove` are planned, and they will report the answer
+AniList gives back rather than assuming it.
+
 ## How it works
 
 ```
@@ -187,9 +238,29 @@ Desktop pane (renderer)          Backend (gateway/serve process)        AniList
   (`agent-plugin-hermes-anilist-<digest>`); treat it as an implementation detail.
 - The plugin declares **no** privileged capabilities (`tools.override`, `llm.*`).
 
+The full credential model, what the plugin deliberately never does, and how to report a problem:
+[SECURITY.md](SECURITY.md).
+
+## Repository layout
+
+```text
+plugin.yaml                     # the manifest: name, version, requires_hermes, provides_tools
+__init__.py                     # register(ctx): the tools, the bundled skill, the state bridge
+tools.py                        # the agent's tools: schemas, handlers, the dispatch contract
+dashboard/manifest.json         # what the dashboard half declares (label, icon, api file)
+dashboard/plugin_api.py         # the only AniList client: routes, cache, rate budget, normalization
+desktop/plugin.js               # the desktop half: chip, popover, workspace, show page
+skills/usage/SKILL.md           # the skill that teaches when to reach for the tools
+tests/                          # the backend suites (offline, no network)
+tools/                          # dev tooling: JS lint, class and i18n audits, headless view tests
+plugin-catalog/                 # the entry to submit to NousResearch/hermes-agent (never read at runtime)
+.github/workflows/ci.yml        # catalog validation + ruff + pytest + the desktop half's checks
+```
+
 ## Development
 
 ```bash
+uvx ruff check .                             # bugs, not taste — see ruff.toml
 uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q   # offline, no network
 node tools/test_plugin_helpers.mjs           # the desktop half's pure helpers, no app needed
 node tools/test_plugin_views.mjs             # renders the show page's views (needs React — see its header)
@@ -282,6 +353,12 @@ storage, precisely so a future version can add one without migrating anyone.
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) — Keep a Changelog, one entry per released version.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the loop (clone → the exact commands → `hermes plugins update`),
+the safety invariants a change has to respect, where each test lives, and the PR checklist.
+[SECURITY.md](SECURITY.md) covers the credential model and how to report a problem.
 
 ## License
 

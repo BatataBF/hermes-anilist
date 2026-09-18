@@ -109,7 +109,7 @@ def _error_message(response: "httpx.Response") -> Optional[str]:
     """AniList's own sentence, when the body carries one — 4xx is otherwise opaque."""
     try:
         first = (response.json().get("errors") or [{}])[0] or {}
-    except Exception:
+    except Exception:  # noqa: BLE001 - a body that is not JSON is no message, not an error
         return None
 
     return first.get("message")
@@ -771,7 +771,7 @@ def _watchlist() -> Dict[str, Dict[str, Any]]:
     """
     try:
         stored = _state_door().get(WATCHLIST_KEY, None)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a state store that cannot answer is an empty list
         return {}
 
     if not isinstance(stored, dict):
@@ -902,7 +902,7 @@ def read_token() -> Optional[str]:
     """The account token, or None. Never logged, never handed to the renderer."""
     try:
         from agent.secret_scope import UnscopedSecretError, get_secret
-    except Exception:
+    except Exception:  # noqa: BLE001 - outside Hermes' own process the secret scope is absent
         return os.environ.get(TOKEN_ENV_VAR) or None
     try:
         return get_secret(TOKEN_ENV_VAR) or None
@@ -1447,7 +1447,7 @@ async def account_delete() -> Dict[str, Any]:
     """Sign out. The client id stays: it is public, and re-typing it is busywork."""
     try:
         removed = _clear_token()
-    except Exception as exc:  # noqa: BLE001 - a managed install can refuse .env writes
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not remove the stored token: {exc}") from exc
 
     return {"removed": removed, **_account_state(_account().get("clientId"), False, None, None)}

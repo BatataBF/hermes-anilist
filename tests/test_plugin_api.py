@@ -21,8 +21,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
 
-import plugin_api  # noqa: E402
-
+import plugin_api
 
 MEDIA_PAYLOAD = {
     "Page": {

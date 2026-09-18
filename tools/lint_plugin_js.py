@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import sys
+from pathlib import Path
 
 # Words that are part of the language, or globals this file may legitimately use
 # without declaring them anywhere.
@@ -197,7 +198,7 @@ def strip_strings_and_comments(source: str) -> str:
 
 def main() -> int:
     path = sys.argv[1] if len(sys.argv) > 1 else "desktop/plugin.js"
-    raw = open(path, encoding="utf-8").read()
+    raw = Path(path).read_text(encoding="utf-8")
     source = strip_strings_and_comments(raw)
     declared = declared_names(source) | GLOBALS | ALLOWED
     missing: dict[str, list[int]] = {}

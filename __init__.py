@@ -50,7 +50,7 @@ def _register_tools(ctx) -> None:
     declaration must move together (``hermes plugins validate`` compares them)."""
     try:
         from .tools import register_tools
-    except Exception:  # noqa: BLE001 - a broken import must not disable the whole plugin
+    except Exception:  # a broken import must not disable the whole plugin
         logger.warning("%s: tools.py could not be imported; agent tools unavailable", PLUGIN_ID, exc_info=True)
 
         return
@@ -77,7 +77,7 @@ def _register_skill(ctx) -> None:
             ),
             frontmatter={"name": SKILL_NAME, "description": "AniList tools: lists, shows, and the honesty rules"},
         )
-    except Exception:  # noqa: BLE001 - a skill is a nicety, not the feature
+    except Exception:  # a skill is a nicety, not the feature
         logger.warning("%s: skill %s could not be registered", PLUGIN_ID, SKILL_NAME, exc_info=True)
 
 
@@ -108,5 +108,5 @@ def _bind_plugin_state(ctx) -> None:
 
     try:
         bind(ctx.state)
-    except Exception:  # noqa: BLE001 - the lazy door is the fallback, not a crash
+    except Exception:  # the lazy door is the fallback, not a crash
         logger.warning("%s: could not bind ctx.state to the dashboard routes", PLUGIN_ID, exc_info=True)

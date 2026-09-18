@@ -1,0 +1,31 @@
+# Ruff, configured for bugs rather than for taste.
+#
+# The rules that reformat this repo's annotations are deliberately OFF: the
+# backend writes `Dict[str, Any]` / `Optional[str]` the way the host codebase
+# does, and `from __future__ import annotations` makes the PEP 585/604 form
+# cosmetic — a repo-wide rewrite would churn every line for no behaviour.
+# What IS on is what catches real mistakes: undefined names, unused imports,
+# dangerous defaults, blind excepts (which our tool surface documents with an
+# explicit `# noqa: BLE001`, and this config makes that comment meaningful).
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+  "E4",   # imports
+  "E7",   # statements
+  "E9",   # runtime errors
+  "F",    # pyflakes: undefined names, unused imports
+  "B",    # bugbear: mutable defaults, silent zip(), and friends
+  "BLE",  # blind except — allowed only with an explicit noqa
+  "SIM",  # simplifications, including files opened without a context manager
+  "EXE",  # a shebang on a file nobody can execute
+  "I",    # import order
+  "RUF100", # a noqa for a rule that is not even enabled is a lie
+]
+ignore = [
+  "B008",  # FastAPI declares dependencies in argument defaults on purpose
+  "N999",  # the plugin directory is `hermes-anilist` (hyphen) by Hermes convention
+  "E501",  # line length is advisory here; the comment style runs long
+  "SIM108", # a nested conditional expression is harder to read than the block it replaces
+]

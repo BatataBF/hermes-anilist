@@ -6,6 +6,40 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Added
+
+- **`CONTRIBUTING.md`** — the loop (clone → the exact commands → `hermes plugins update`), the safety
+  invariants a change has to respect (the renderer never holds a credential, one HTTP client and one
+  cache, reads name their store, `null` is never invented, writes are absolute, declared capabilities
+  match reality, handlers take `**kw`), where each test lives, and the PR checklist.
+- **`SECURITY.md`** — what the plugin is security-wise (it listens on nothing; the only host it talks to
+  is AniList), where the token and the client id live, what it deliberately never does (no telemetry, no
+  self-update, no privileged capabilities, no credentials in cron jobs), and how to report a problem
+  without pasting a token or your list.
+- **`ruff.toml`, and ruff in CI** — bug-focused rules (undefined names, unused imports, blind excepts
+  that carry no reason, unsafe defaults), with the annotation-modernization rules off on purpose: the
+  backend writes `Dict`/`Optional` the way the host codebase does, and `from __future__ import
+  annotations` makes those rewrites cosmetic. The test job runs a Python 3.11 **and** 3.12 matrix, so the
+  source stays installable on the next Python too.
+- **The tools' arguments, in the README** — a value table and a JSON example for `anilist_list` and
+  `anilist_show`, including what `limit`/`episodes` clamp to and that a truncated answer says so.
+- **A repository layout section**, so the four halves and the dev tooling are findable from the README.
+- The full update paths: `hermes plugins update` + restart, `--force` reinstall, a hand-made clone, and
+  the difference a catalog install has (its pin, never `git pull`).
+
+### Fixed
+
+- Lint findings the new rules surfaced: a stale `# noqa` on five handlers whose excepts are deliberately
+  blind (they now carry a `BLE001` directive *and* the reason), two un-sorted import blocks, one
+  `open()` without a context manager, and a shebang on a file nobody could execute. The explanatory
+  comments that rode on those directives were kept as plain comments — the directive was unnecessary,
+  the *why* was not.
+
+### Changed
+
+- `.gitignore` covers the caches and build outputs of that tooling (`.ruff_cache/`, `.coverage`,
+  `htmlcov/`, `dist/`, `node_modules/`, `.env`), so a contributor's tree stays clean.
+
 ## [0.8.0] - 2026-09-17
 
 ### Added

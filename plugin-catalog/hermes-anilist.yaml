@@ -1,0 +1,38 @@
+# The Hermes plugin catalog entry for this plugin.
+#
+# THIS FILE IS NOT READ BY HERMES. It is kept here so the submission is a copy,
+# not a reconstruction: the catalog lives in the hermes-agent repository, and
+# admission is a pull request adding `plugin-catalog/hermes-anilist.yaml` with
+# exactly these contents. Checklist: that repo's plugin-catalog/README.md.
+#
+#   sha     the reviewed commit — the v0.8.0 release tag's commit, not HEAD.
+#           Bump it in the same PR that bumps `version`, and never point it at a
+#           branch: the pin IS the trust model, and the reviewer reads the diff
+#           of the commit range being adopted. Quote it: an all-digit SHA
+#           unquoted is a YAML number and the loader rejects it.
+#   image   optional 2:1 banner on a GitHub host, pinned to `sha` so it cannot
+#           change under the review (not added yet — the card falls back to text).
+name: hermes-anilist
+repo: https://github.com/BatataBF/hermes-anilist
+sha: "77ada126d8726994e674a33884e324fb532b7fcb"
+description: AniList tracker for Hermes Desktop — airing countdowns, a season browser, a local or
+  account-backed watchlist, episode alerts and a daily digest, plus agent tools that read your own
+  list and answer about a single show.
+maintainer: BatataBF
+tier: community
+category: desktop
+requires_hermes: ">=0.21"
+docs_url: https://github.com/BatataBF/hermes-anilist#readme
+version: "0.8.0"
+platforms: []
+capabilities:
+  # Must match what register(ctx) actually does at `sha`: `hermes plugins
+  # validate` diffs these against reality and fails the entry on drift.
+  provides_tools:
+    - anilist_list
+    - anilist_show
+  provides_hooks: []
+  provides_middleware: []
+  # No env var is required to install or to read: the AniList token is optional
+  # and lives in the profile's .env only after the user signs in from the pane.
+  requires_env: []

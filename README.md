@@ -3,6 +3,12 @@
 AniList tracker for **Hermes Desktop** — airing countdowns, a season browser, episode alerts and
 agent tools over your own list, without leaving Hermes.
 
+**Built with `@Hermes`.** Every line of this plugin — the desktop half, the backend, the agent tools,
+the tests and this README — was developed with
+[Hermes Agent](https://hermes-agent.nousresearch.com/) doing the implementation, driven by the repo's
+owner and running mostly on **`deepseek-v4.1-flash`**. The taste, the screenshots and the bug reports
+are human; the code is not.
+
 > **Status: 0.8.0.** The pane, the AniList backend (read *and* write), the pin-flow sign-in, the cron
 > alerts, the daily digest and the two agent tools all work today. Next: the catalog submission
 > (`hermes plugins install hermes-anilist`) — see [Hermes plugin catalog](#hermes-plugin-catalog).

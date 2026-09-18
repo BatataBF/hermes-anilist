@@ -30,6 +30,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - The full update paths: `hermes plugins update` + restart, `--force` reinstall, a hand-made clone, and
   the difference a catalog install has (its pin, never `git pull`).
 
+### Changed
+
+- **The catalog submission moved out of the README.** It is maintainer-facing process, not a feature a
+  reader needs: it lives in [`CONTRIBUTING.md`](CONTRIBUTING.md) now (the checklist, the entry file, the
+  two-week pin rule and how a release bumps the pin), and the README keeps a one-line pointer. Nothing in
+  `plugin-catalog/` is read by Hermes at runtime, and the README no longer implies otherwise.
+- **The show page's screenshot no longer names a host.** The `RUN ON` control is redacted where it showed
+  the alert destination; the rest of the capture is untouched. Two other captures were left out of the
+  gallery entirely because they showed the account row and the destination list.
+- `.gitignore` covers the caches and build outputs of that tooling (`.ruff_cache/`, `.coverage`,
+  `htmlcov/`, `dist/`, `node_modules/`, `.env`), so a contributor's tree stays clean.
+
 ### Fixed
 
 - Lint findings the new rules surfaced: a stale `# noqa` on five handlers whose excepts are deliberately
@@ -37,11 +49,6 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   `open()` without a context manager, and a shebang on a file nobody could execute. The explanatory
   comments that rode on those directives were kept as plain comments — the directive was unnecessary,
   the *why* was not.
-
-### Changed
-
-- `.gitignore` covers the caches and build outputs of that tooling (`.ruff_cache/`, `.coverage`,
-  `htmlcov/`, `dist/`, `node_modules/`, `.env`), so a contributor's tree stays clean.
 
 ## [0.8.0] - 2026-09-17
 

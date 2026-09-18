@@ -13,8 +13,7 @@ are human; the code is not.
 
 > **Status: 0.8.0.** The pane, the AniList backend (read *and* write), the pin-flow sign-in, the cron
 > alerts, the daily digest and the two agent tools all work today. Next: the catalog PR (which opens
-> once the pinned commit is two weeks old — see [Hermes plugin catalog](#hermes-plugin-catalog)) and the
-> agent's writing tools.
+> once the pinned commit is two weeks old) and the agent's writing tools.
 
 ---
 
@@ -303,41 +302,6 @@ clone → push → `hermes plugins update hermes-anilist`.
 Desktop-half edits hot-reload: save `desktop/plugin.js` and the app picks it up. Backend-half and
 `tools.py` edits need the backend restarted, because tools and routes register at startup.
 
-## Hermes plugin catalog
-
-**What this section is for:** the catalog is the only reviewed index behind
-`hermes plugins install <name>`, and admission is a pull request to a *different* repository
-(`NousResearch/hermes-agent`) — never to this one. So this section is the submission's checklist with
-where this repo stands, and it is where the entry file lives, ready to copy. Nothing under this repo's
-`plugin-catalog/` directory is read by Hermes at runtime.
-
-The catalog itself is documented at
-[Plugin Catalog](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugin-catalog), and
-the checklist is that repo's `plugin-catalog/README.md`:
-
-| Requirement | Where this repo stands |
-|---|---|
-| Owner-submitted PR | BatataBF owns the repo |
-| Public repository | `github.com/BatataBF/hermes-anilist` |
-| Real releases/tags, not just a branch | annotated tags per release — `v0.7.0`, `v0.8.0`, … |
-| Exact 40-hex SHA pin, at least two weeks old at review | pinned to the `v0.8.0` commit; submit the PR no earlier than **2026-10-01** |
-| Not self-updating | no updater in the plugin: `hermes plugins update` is the only path |
-| Declared capabilities match reality | `hermes plugins validate` passes (2 declared tools, 2 registered) |
-| Admission validation green | `.github/workflows/ci.yml` runs the same validator on every push |
-| Security scan clean | `hermes plugins validate` reports `safe`; no `tools.override`, no LLM access |
-
-The entry itself is kept in this repo, ready to copy, at
-[`plugin-catalog/hermes-anilist.yaml`](plugin-catalog/hermes-anilist.yaml). To submit, open a PR against
-`NousResearch/hermes-agent` adding that same path with the file's contents, and paste the validator
-output in the description.
-
-The developer guide also asks standalone plugins to be promoted in the Nous Research Discord
-`#plugins-skills-and-skins` channel — a community plugin is a standalone repo first
-(`~/.hermes/plugins/` or a pip entry point) and a catalog entry second.
-
-Bumping the pin after a release is the same PR with a new `sha` (and the matching `version` label), so
-the diff a reviewer reads is exactly the commit range users would adopt.
-
 ## Roadmap
 
 - [x] **L0 · skeleton** — repository, unified package layout, live read-only pane over AniList.
@@ -370,7 +334,8 @@ See [CHANGELOG.md](CHANGELOG.md) — Keep a Changelog, one entry per released ve
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the loop (clone → the exact commands → `hermes plugins update`),
-the safety invariants a change has to respect, where each test lives, and the PR checklist.
+the safety invariants a change has to respect, where each test lives, the PR checklist, and the
+maintainer-facing side: the plugin catalog submission and how a release pin gets bumped.
 [SECURITY.md](SECURITY.md) covers the credential model and how to report a problem.
 
 ## License

@@ -68,5 +68,38 @@ Mirror what is under test, not the file layout:
 
 One commit per task, imperative subject, the *why* in the body. Releases are deliberate: the `version`
 in `plugin.yaml`, a `## [x.y.z] - YYYY-MM-DD` section in the changelog and an annotated tag, all in the
-release commit. Bumping the plugin catalog's pin happens after a release, in the PR that carries the new
-`sha` and `version` (see the README's *Hermes plugin catalog*).
+release commit. The catalog pin is bumped after a release, in its own PR (below).
+
+## The plugin catalog (maintainer-facing)
+
+The catalog is the only reviewed index behind `hermes plugins install <name>`, and admission is a pull
+request to a **different** repository — `NousResearch/hermes-agent`, never this one. So: it is where the
+submission's checklist lives, and where the entry file is kept ready to copy. Nothing under this repo's
+`plugin-catalog/` directory is read by Hermes at runtime — that directory is documentation plus the PR's
+payload.
+
+The policy is hermes-agent's `plugin-catalog/README.md`; the user-facing side is the
+[Plugin Catalog](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugin-catalog) page.
+
+| Requirement | Where this repo stands |
+|---|---|
+| Owner-submitted PR | BatataBF owns the repo |
+| Public repository | `github.com/BatataBF/hermes-anilist` |
+| Real releases/tags, not just a branch | annotated tags per release — `v0.7.0`, `v0.8.0`, … |
+| Exact 40-hex SHA pin, at least two weeks old at review | pinned to the `v0.8.0` commit; the PR opens no earlier than **2026-10-01** |
+| Not self-updating | no updater in the plugin: `hermes plugins update` is the only path |
+| Declared capabilities match reality | `hermes plugins validate` passes (2 declared tools, 2 registered) |
+| Admission validation green | `.github/workflows/ci.yml` runs the same validator on every push |
+| Security scan clean | `hermes plugins validate` reports `safe`; no `tools.override`, no LLM access |
+
+**To submit**: open a PR against `NousResearch/hermes-agent` adding `plugin-catalog/hermes-anilist.yaml`
+with the contents of [this repo's copy](plugin-catalog/hermes-anilist.yaml), and paste the validator
+output in the description.
+
+**To bump the pin** after a release: the same PR shape with a new `sha` (the release commit, quoted so
+YAML does not read an all-digit SHA as a number) and the matching `version` label, so the diff a reviewer
+reads is exactly the commit range users would adopt.
+
+The developer guide also asks standalone plugins to be promoted in the Nous Research Discord
+`#plugins-skills-and-skins` channel — a community plugin is a standalone repo first
+(`~/.hermes/plugins/` or a pip entry point) and a catalog entry second.

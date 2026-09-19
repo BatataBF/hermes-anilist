@@ -567,6 +567,131 @@ def test_watchlist_lists_newest_first(monkeypatch):
     assert [item["id"] for item in body["items"]] == [2, 1]
 
 
+# ─── settings (the host owns the preferences; every device reads them) ───────
+
+
+def _settings_client(monkeypatch, seed=None):
+    state = _FakeState(seed)
+    monkeypatch.setattr(plugin_api, "_state", state)
+    app = FastAPI()
+    app.include_router(plugin_api.router, prefix=PREFIX)
+
+    return SimpleNamespace(client=TestClient(app), state=state)
+
+
+def test_settings_start_empty_and_the_backend_invents_no_defaults(monkeypatch):
+    """Defaults are the desktop half's business: the host stores choices, not a schema."""
+    body = _settings_client(monkeypatch).client.get(f"{PREFIX}/settings").json()
+
+    assert body == {"settings": {}}
+
+
+def test_settings_partial_save_merges_instead_of_replacing(monkeypatch):
+    host = _settings_client(monkeypatch)
+
+    host.client.put(f"{PREFIX}/settings", json={"windowDays": 14, "titleLanguage": "romaji"})
+    body = host.client.put(f"{PREFIX}/settings", json={"covers": False}).json()
+
+    assert body["settings"] == {"windowDays": 14, "titleLanguage": "romaji", "covers": False}
+    # and the store is the same answer the next device reads
+    assert host.client.get(f"{PREFIX}/settings").json()["settings"]["windowDays"] == 14
+    assert host.state.data["settings"]["titleLanguage"] == "romaji"
+
+
+def test_settings_reject_a_value_outside_its_enum_without_writing(monkeypatch):
+    host = _settings_client(monkeypatch)
+
+    for patch in (
+        {"windowDays": 5},
+        {"digestHour": 10},
+        {"titleLanguage": "spanish"},
+        {"alertDelivery": "email"},
+        {"defaultFilter": "year"},
+    ):
+        response = host.client.put(f"{PREFIX}/settings", json=patch)
+
+        assert response.status_code == 422, patch
+        assert "must be one of" in response.json()["detail"]
+
+    assert host.state.writes == 0
+
+
+def test_settings_accept_numeric_enums_sent_as_floats(monkeypatch):
+    """JSON has one number type: 7.0 is the choice "7", and it is stored as an int."""
+    host = _settings_client(monkeypatch)
+
+    stored = host.client.put(f"{PREFIX}/settings", json={"windowDays": 7.0, "digestHour": 9.0}).json()["settings"]
+
+    assert stored == {"windowDays": 7, "digestHour": 9}
+    assert isinstance(host.state.data["settings"]["windowDays"], int)
+
+
+def test_settings_refuse_a_boolean_where_a_number_belongs(monkeypatch):
+    """True == 1 in Python; a flag smuggled into an int enum renders as nothing a user chose."""
+    host = _settings_client(monkeypatch)
+
+    assert host.client.put(f"{PREFIX}/settings", json={"windowDays": True}).status_code == 422
+    assert host.client.put(f"{PREFIX}/settings", json={"covers": "yes"}).status_code == 422
+    assert host.state.writes == 0
+
+
+def test_settings_drop_a_key_this_build_never_heard_of(monkeypatch):
+    """Forward compatibility: a newer desktop's unknown key must not cost it the whole save."""
+    host = _settings_client(monkeypatch)
+
+    body = host.client.put(f"{PREFIX}/settings", json={"windowDays": 3, "futurePreference": "x"}).json()
+
+    assert body["settings"] == {"windowDays": 3}
+    assert "futurePreference" not in host.state.data["settings"]
+
+
+def test_settings_refuse_an_explicit_null(monkeypatch):
+    """"Absent" means untouched; a null is a value nobody can render."""
+    host = _settings_client(monkeypatch)
+
+    assert host.client.put(f"{PREFIX}/settings", json={"windowDays": None}).status_code == 422
+    assert host.state.writes == 0
+
+
+def test_settings_bound_the_alert_route_and_keep_the_rest_of_the_save(monkeypatch):
+    host = _settings_client(monkeypatch)
+
+    assert host.client.put(f"{PREFIX}/settings", json={"alertRoute": "vps-zonda:default"}).status_code == 200
+    assert host.client.put(f"{PREFIX}/settings", json={"alertRoute": "x" * 121}).status_code == 422
+    assert host.state.data["settings"]["alertRoute"] == "vps-zonda:default"
+
+
+def test_settings_do_not_rewrite_the_store_when_nothing_changed(monkeypatch):
+    """A device re-sending what the host already has must not touch the file."""
+    host = _settings_client(monkeypatch, seed={"settings": {"windowDays": 7}})
+
+    body = host.client.put(f"{PREFIX}/settings", json={"windowDays": 7, "covers": False}).json()
+
+    assert body["settings"] == {"windowDays": 7, "covers": False}
+    assert host.state.writes == 1  # the new `covers` only
+
+
+def test_settings_treat_a_corrupt_store_as_empty(monkeypatch):
+    host = _settings_client(monkeypatch, seed={"settings": "not a mapping"})
+
+    assert host.client.get(f"{PREFIX}/settings").json() == {"settings": {}}
+    assert host.client.put(f"{PREFIX}/settings", json={"covers": False}).json()["settings"] == {"covers": False}
+
+
+def test_settings_enums_are_the_contract_the_desktop_half_renders():
+    """Pinned on purpose: the desktop half pins the same sets in
+    tools/test_plugin_helpers.mjs, so a drift fails a suite instead of a pane."""
+    assert plugin_api.SETTINGS_ENUMS == {
+        "defaultFilter": ("today", "week", "list"),
+        "titleLanguage": ("english", "romaji", "native"),
+        "windowDays": (3, 7, 14),
+        "alertDelivery": ("local", "telegram", "discord"),
+        "digestHour": (8, 9, 12, 20),
+    }
+    assert plugin_api.SETTINGS_FLAGS == ("covers",)
+    assert plugin_api.SETTINGS_TEXT == {"alertRoute": 120}
+
+
 # ─── account (sign-in: a public client id in state, the token in the profile's .env) ─
 
 

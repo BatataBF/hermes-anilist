@@ -45,13 +45,14 @@ const grabConst = (name) => {
   return lines.slice(start, end + 1).join('\n')
 }
 
-const CONSTS = ['STRINGS', 'DEFAULT_SETTINGS', 'ALERT_PREFIX', 'ALERT_RE', 'DIGEST_PREFIX', 'DIGEST_STATUSES', 'DELIVERY_NAMES', 'SYNOPSIS_CLAMP', 'CHIP_COMING_HOURS']
+const CONSTS = ['STRINGS', 'DEFAULT_SETTINGS', 'ALERT_PREFIX', 'ALERT_RE', 'DIGEST_PREFIX', 'DIGEST_STATUSES', 'DELIVERY_NAMES', 'SYNOPSIS_CLAMP', 'CHIP_COMING_HOURS', 'TITLE_LANGUAGES', 'WINDOW_DAYS', 'ALERT_DELIVERIES', 'DIGEST_HOURS', 'SURFACE_RETRIES_MAX']
 const FUNCTIONS = [
   'countdown', 'endOfToday', 'withinFilter', 'dayKey', 'dayLabel', 'groupByDay', 'rowKey', 'mergeAiring',
   'titleOf', 'routeId', 'isAniListJob', 'isAlert', 'isDigest', 'alertFor', 'alertTitle', 'alertStateLabel',
   'alertDestinationLabel', 'alertRouteLabel', 'digestIds', 'digestSchedule', 'digestJobName',
   'preferredRoute', 'runAtLabel', 'airingWhen', 'airedDate', 'synopsisStyle', 'chipIcon', 'comingAiring', 'episodeTag',
-  'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring'
+  'clockTime', 'monthHeading', 'calendarMonth', 'monthGrid', 'hasEpisodesOutside', 'nextAiring',
+  'normalizeSettings', 'settingsSeed', 'surfaceRouteKey', 'surfaceAfterFailure', 'isMissingBackend'
 ]
 
 const helpers = await import(
@@ -360,6 +361,82 @@ test('the chip counts what is coming: only mine, only inside the horizon, in air
   assert.equal(helpers.comingAiring(null, ids, 24, now).length, 0)
   // The tooltip promises this number; keeping them one value is what stops drift.
   assert.equal(helpers.CHIP_COMING_HOURS, 24)
+})
+
+// ─── settings: the host owns them, a device only reads ──────────────────────
+
+test('the settings contract matches the enums the backend validates', () => {
+  // The Python side pins the same sets (tests/test_plugin_api.py); a drift has to
+  // fail one of the two suites, never a reader's pane.
+  assert.deepEqual(helpers.TITLE_LANGUAGES, ['english', 'romaji', 'native'])
+  assert.deepEqual(helpers.WINDOW_DAYS, [3, 7, 14])
+  assert.deepEqual(helpers.ALERT_DELIVERIES, ['local', 'telegram', 'discord'])
+  assert.deepEqual(helpers.DIGEST_HOURS, [8, 9, 12, 20])
+})
+
+test('a host that has stored nothing means the defaults, not a broken shape', () => {
+  assert.deepEqual(helpers.normalizeSettings({}), helpers.DEFAULT_SETTINGS)
+  assert.deepEqual(helpers.normalizeSettings(null), helpers.DEFAULT_SETTINGS)
+  assert.deepEqual(helpers.normalizeSettings('nonsense'), helpers.DEFAULT_SETTINGS)
+})
+
+test('a preference outside the contract falls back instead of rendering', () => {
+  const stored = helpers.normalizeSettings({
+    windowDays: 5,
+    titleLanguage: 'spanish',
+    covers: 'no',
+    digestHour: '9',
+    alertDelivery: 'carrier-pigeon',
+    defaultFilter: 'year'
+  })
+
+  assert.equal(stored.windowDays, helpers.DEFAULT_SETTINGS.windowDays)
+  assert.equal(stored.titleLanguage, helpers.DEFAULT_SETTINGS.titleLanguage)
+  assert.equal(stored.digestHour, helpers.DEFAULT_SETTINGS.digestHour)
+  assert.equal(stored.alertDelivery, helpers.DEFAULT_SETTINGS.alertDelivery)
+  assert.equal(stored.defaultFilter, helpers.DEFAULT_SETTINGS.defaultFilter)
+  // Only an explicit false turns covers off: a string must not read as "off".
+  assert.equal(stored.covers, true)
+})
+
+test('the seed only fires against a host with nothing stored', () => {
+  const local = { windowDays: 14, titleLanguage: 'romaji' }
+
+  assert.deepEqual(helpers.settingsSeed({}, local), helpers.normalizeSettings(local))
+  assert.equal(helpers.settingsSeed(null, local).windowDays, 14)
+  // A host holding ANY preference owns them: a second device opening the pane
+  // must not overwrite the first reader's choices with its own leftovers.
+  assert.equal(helpers.settingsSeed({ covers: false }, local), null)
+  assert.equal(helpers.settingsSeed({ windowDays: 3 }, local), null)
+  // Nothing local to migrate, or nothing usable.
+  assert.equal(helpers.settingsSeed({}, null), null)
+  assert.equal(helpers.settingsSeed({}, 'not an object'), null)
+})
+
+test('a registration batch is named by its host and profile', () => {
+  assert.equal(helpers.surfaceRouteKey('vps-zonda', 'default'), 'vps-zonda:default')
+  assert.equal(helpers.surfaceRouteKey(null, null), 'local:default', 'no connection means this machine')
+  assert.equal(helpers.surfaceRouteKey('vps-zonda', ''), 'vps-zonda:default')
+  assert.notEqual(
+    helpers.surfaceRouteKey('vps-zonda', 'default'),
+    helpers.surfaceRouteKey('local', 'default'),
+    'the same profile on two hosts is two surfaces'
+  )
+})
+
+test('a failed probe tells a host without the plugin from a host that is merely down', () => {
+  const missing = new Error('404 Not Found')
+  const unreachable = new Error('fetch failed')
+
+  // The plugin is not installed there: the surface goes away at once.
+  assert.equal(helpers.surfaceAfterFailure(missing, 'vps-zonda:default', 'vps-zonda:default'), 'hide')
+  // The reader left that host: whatever the answer says, it is not about this one.
+  assert.equal(helpers.surfaceAfterFailure(missing, 'vps-zonda:default', 'local:default'), 'hide')
+  assert.equal(helpers.surfaceAfterFailure(unreachable, 'vps-zonda:default', 'local:default'), 'hide')
+  // Same host, transient: keep what is on screen and give the host one more try.
+  assert.equal(helpers.surfaceAfterFailure(unreachable, 'vps-zonda:default', 'vps-zonda:default'), 'retry')
+  // The ladder stays bounded — a host that is down is not polled forever.
+  assert.ok(helpers.SURFACE_RETRIES_MAX >= 1 && helpers.SURFACE_RETRIES_MAX <= 5)
 })
 
 if (failed) {

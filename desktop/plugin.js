@@ -85,6 +85,7 @@ const STRINGS = {
     retry: 'Retry',
     refresh: 'Refresh',
     refreshed: 'AniList refreshed',
+    settingsUnsynced: 'AniList: the host did not save that preference.',
     openOnAniList: 'Open on AniList',
     empty: 'Nothing airing in this window.',
     backendMissing: 'AniList backend unavailable',
@@ -261,6 +262,7 @@ const STRINGS = {
     retry: 'Reintentar',
     refresh: 'Actualizar',
     refreshed: 'AniList actualizado',
+    settingsUnsynced: 'AniList: el host no guardó esa preferencia.',
     openOnAniList: 'Abrir en AniList',
     empty: 'No hay estrenos en esta ventana.',
     backendMissing: 'Backend de AniList no disponible',
@@ -508,7 +510,7 @@ function useSource() {
   return { id, label: registry[id] || null, profile }
 }
 
-// ─── settings (client-side, per install) ────────────────────────────────────
+// ─── settings (host-side: one store, every device) ──────────────────────────
 
 const SETTINGS_KEY = 'settings'
 const TITLE_LANGUAGES = ['english', 'romaji', 'native']
@@ -562,17 +564,87 @@ function normalizeSettings(raw) {
   }
 }
 
-/** Plugin storage is synchronous, JSON, and scoped per install. Read again after register(). */
+/**
+ * The HOST owns the preferences. This device keeps only the last answer it was
+ * given — enough to paint a change at once and to snap back when a write fails.
+ * The pre-host local copy is read exactly once, to seed a host that has nothing
+ * stored yet (`settingsSeed`); from then on the host's copy is the only one, so
+ * two machines cannot drift apart silently.
+ */
 const $settings = atom(normalizeSettings(null))
 
-function saveSettings(patch) {
-  const next = normalizeSettings({ ...$settings.get(), ...patch })
-  $settings.set(next)
+/** The last answer the host actually gave: where a failed write snaps back to. */
+let hostSettings = null
+
+/** What a pre-host version left in THIS machine's plugin storage, if anything. */
+function localSettings() {
+  try {
+    return store && store.get ? store.get(SETTINGS_KEY, null) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The blob that should seed a host with no preferences yet, or null when the host
+ * must not be touched. A host that answered with any preference owns them: a
+ * second device opening the pane must never overwrite the first reader's choices
+ * with its own leftovers.
+ */
+function settingsSeed(hostStored, local) {
+  if (hostStored && typeof hostStored === 'object' && Object.keys(hostStored).length > 0) return null
+  if (!local || typeof local !== 'object') return null
+
+  return normalizeSettings(local)
+}
+
+/**
+ * Read the host's preferences — and prove the host is there. `/settings` is the
+ * cheapest route that answers with something this half needs, so the gate and
+ * the load are one request: anything other than an answer means the Python half
+ * is not mounted on the ACTIVE connection, which is what decides whether the
+ * surface exists at all.
+ */
+async function loadSettings() {
+  const payload = await rest('/settings')
+  const stored = (payload && payload.settings) || null
+  const seed = settingsSeed(stored, localSettings())
+
+  if (!seed) {
+    hostSettings = stored
+    $settings.set(normalizeSettings(stored))
+    return
+  }
 
   try {
-    store?.set?.(SETTINGS_KEY, next)
+    const seeded = await rest('/settings', { method: 'PUT', body: seed })
+    hostSettings = (seeded && seeded.settings) || seed
+    store?.remove?.(SETTINGS_KEY)
   } catch {
-    /* best-effort: the session keeps the value either way */
+    // The host is there but the seed did not land: keep the values on screen and
+    // try again the next time this device opens the pane.
+    hostSettings = seed
+  }
+
+  $settings.set(normalizeSettings(hostSettings))
+}
+
+/** Optimistic, then honest: the pane paints at once, the host has the last word. */
+function saveSettings(patch) {
+  $settings.set(normalizeSettings({ ...$settings.get(), ...patch }))
+  void pushSettings(patch)
+}
+
+async function pushSettings(patch) {
+  try {
+    const payload = await rest('/settings', { method: 'PUT', body: patch })
+    hostSettings = (payload && payload.settings) || hostSettings
+    $settings.set(normalizeSettings(hostSettings))
+  } catch {
+    // A preference the host did not store must not look stored: snap back to the
+    // last answer it actually gave — this device, and the next one, read the same.
+    $settings.set(normalizeSettings(hostSettings))
+    host.notify({ kind: 'error', message: t('settingsUnsynced') })
   }
 }
 
@@ -3898,6 +3970,118 @@ function NextChip() {
   })
 }
 
+// ─── the surface gate ───────────────────────────────────────────────────────
+
+/**
+ * The app loads this half wherever it runs; what it SHOWS belongs to the host.
+ * Only the Python half can answer for a host, so every contribution is registered
+ * while that half answers on the ACTIVE connection and removed the moment it
+ * stops: a device pointed at a backend without the plugin shows no chip, no
+ * palette commands and no panes, and grows them again when it switches to one
+ * that has it. Installing on the host is then the whole install — a device needs
+ * the file, never a second setup.
+ *
+ * Each route can answer differently (this machine's own backend, an SSH box, any
+ * profile on either), so a swap re-probes instead of trusting what the previous
+ * route said.
+ */
+let surfaceDispose = null
+let surfaceRoute = null
+let surfaceToken = 0
+let surfaceRetry = null
+let surfaceRetries = 0
+
+/** How long a transiently unreachable host gets before its surface goes away. */
+const SURFACE_RETRY_MS = 5000
+/** Two tries, then the surface goes away until the next swap: a bounded ladder,
+ *  never a poll loop against a host that is simply down. */
+const SURFACE_RETRIES_MAX = 2
+
+/** The identity a registration batch belongs to: which host, which profile. */
+function surfaceRouteKey(connectionId, profile) {
+  return `${connectionId || 'local'}:${profile || 'default'}`
+}
+
+function currentSurfaceRoute() {
+  const read = (atom) => (atom && typeof atom.get === 'function' ? atom.get() : null)
+
+  return surfaceRouteKey(read(host.state.connectionId), read(host.state.profile))
+}
+
+function hideSurface() {
+  if (surfaceDispose) {
+    surfaceDispose()
+    surfaceDispose = null
+  }
+
+  surfaceRoute = null
+}
+
+/**
+ * What a failed probe means for what is already on screen. A host without the
+ * plugin is not a host that is merely down: the first takes the surface away at
+ * once, the second keeps the surface it has and gives the host one more chance —
+ * a stale answer from a host the reader has left is never left standing.
+ */
+function surfaceAfterFailure(failure, mountedRoute, route) {
+  if (isMissingBackend(failure)) return 'hide'
+  if (mountedRoute !== route) return 'hide'
+
+  return 'retry'
+}
+
+function scheduleSurfaceRetry(ctx) {
+  if (surfaceRetry || surfaceRetries >= SURFACE_RETRIES_MAX) return
+
+  surfaceRetries += 1
+  surfaceRetry = setTimeout(() => {
+    surfaceRetry = null
+    void syncSurface(ctx)
+  }, SURFACE_RETRY_MS)
+}
+
+function stopSurfaceRetry() {
+  if (surfaceRetry) {
+    clearTimeout(surfaceRetry)
+    surfaceRetry = null
+  }
+}
+
+async function syncSurface(ctx) {
+  const token = ++surfaceToken
+  const route = currentSurfaceRoute()
+  let mounted = true
+  let failure = null
+
+  try {
+    await loadSettings()
+  } catch (error) {
+    mounted = false
+    failure = error
+  }
+
+  // A newer swap (or an unload) owns the answer now.
+  if (token !== surfaceToken) return
+
+  if (!mounted) {
+    if (surfaceAfterFailure(failure, surfaceRoute, route) === 'hide') hideSurface()
+    else scheduleSurfaceRetry(ctx)
+
+    return
+  }
+
+  surfaceRetries = 0
+
+  // Same host, already on screen: refresh the preferences without remounting the
+  // contributions — a remount would close a popover the reader has open.
+  if (surfaceDispose && surfaceRoute === route) return
+
+  hideSurface()
+  surfaceDispose = ctx.registerMany(contributions())
+  surfaceRoute = route
+  void refreshConnections()
+}
+
 // ─── plugin ─────────────────────────────────────────────────────────────────
 
 export default {
@@ -3911,59 +4095,82 @@ export default {
     rest = ctx.rest
     osDoor = ctx.os
     store = ctx.storage
-    // Storage only exists after register(): re-read so a saved preference wins.
-    $settings.set(normalizeSettings(store && store.get ? store.get(SETTINGS_KEY, null) : null))
     ctx.i18n.register(STRINGS)
     t = ctx.i18n.t
     void refreshConnections()
 
-    ctx.registerMany([
-      {
-        id: 'chip',
-        area: 'statusBar.right',
-        order: 130,
-        render: () => jsx(NextChip, {})
-      },
-      {
-        id: 'seasons',
-        area: PALETTE_AREA,
-        data: {
-          id: 'anilist.seasons',
-          label: t('paletteSeasons'),
-          keywords: ['anime', 'anilist', 'season', 'search', 'browse', 'temporadas'],
-          run: () => {
-            if (openAniListWorkspace('browse')) return
-            // No main-area door on this desktop: point at the surface that has one.
-            host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
-          }
-        }
-      },
-      {
-        id: 'settings',
-        area: PALETTE_AREA,
-        data: {
-          id: 'anilist.settings',
-          label: t('paletteSettings'),
-          keywords: ['anime', 'anilist', 'settings', 'preferences', 'ajustes', 'configuracion'],
-          run: () => {
-            if (openAniListWorkspace('settings')) return
-            host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
-          }
-        }
-      },
-      {
-        id: 'refresh',
-        area: PALETTE_AREA,
-        data: {
-          id: 'anilist.refresh',
-          label: t('paletteRefresh'),
-          keywords: ['anime', 'anilist', 'refresh'],
-          run: () => {
-            void queryClient.invalidateQueries({ queryKey: [SOURCE] })
-            host.notify({ kind: 'info', message: t('refreshed') })
-          }
+    // A connection or profile swap changes which host answers for this window, so
+    // the gate re-runs on either. Feature-detected: an app build whose atoms
+    // expose no `listen` keeps the surface registered for the whole session.
+    const resync = () => void syncSurface(ctx)
+    const stopListening = [host.state.connectionId, host.state.profile]
+      .filter((atom) => atom && typeof atom.listen === 'function')
+      .map((atom) => atom.listen(resync))
+
+    // Also feature-detected: the loader already disposes the contributions, so an
+    // older shell without `onDispose` only leaks these listeners and the retry
+    // timer — it does not lose the surface.
+    if (typeof ctx.onDispose === 'function') {
+      ctx.onDispose(() => {
+        stopListening.forEach((stop) => stop())
+        surfaceToken += 1
+        stopSurfaceRetry()
+        hideSurface()
+      })
+    }
+
+    void syncSurface(ctx)
+  }
+}
+
+/** Everything this half contributes, as one batch: one probe decides all of it. */
+function contributions() {
+  return [
+    {
+      id: 'chip',
+      area: 'statusBar.right',
+      order: 130,
+      render: () => jsx(NextChip, {})
+    },
+    {
+      id: 'seasons',
+      area: PALETTE_AREA,
+      data: {
+        id: 'anilist.seasons',
+        label: t('paletteSeasons'),
+        keywords: ['anime', 'anilist', 'season', 'search', 'browse', 'temporadas'],
+        run: () => {
+          if (openAniListWorkspace('browse')) return
+          // No main-area door on this desktop: point at the surface that has one.
+          host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
         }
       }
-    ])
-  }
+    },
+    {
+      id: 'settings',
+      area: PALETTE_AREA,
+      data: {
+        id: 'anilist.settings',
+        label: t('paletteSettings'),
+        keywords: ['anime', 'anilist', 'settings', 'preferences', 'ajustes', 'configuracion'],
+        run: () => {
+          if (openAniListWorkspace('settings')) return
+          host.notify({ kind: 'info', message: 'AniList: ' + t('chipFallback') })
+        }
+      }
+    },
+    {
+      id: 'refresh',
+      area: PALETTE_AREA,
+      data: {
+        id: 'anilist.refresh',
+        label: t('paletteRefresh'),
+        keywords: ['anime', 'anilist', 'refresh'],
+        run: () => {
+          void queryClient.invalidateQueries({ queryKey: [SOURCE] })
+          host.notify({ kind: 'info', message: t('refreshed') })
+        }
+      }
+    }
+  ]
 }

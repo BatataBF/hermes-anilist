@@ -23,7 +23,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, HTTPException, Path, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 router = APIRouter()
 
@@ -784,6 +784,105 @@ def _save_watchlist(entries: Dict[str, Dict[str, Any]]) -> None:
     _state_door().set(WATCHLIST_KEY, entries)
 
 
+# ─── settings (one store for every device) ───────────────────────────────────
+
+# Preferences live HERE rather than in each desktop's local storage: the plugin is
+# installed once — on the host — and every device that connects should read the
+# same window, title language and digest hour. A device-local copy silently
+# diverges the moment a second machine opens the pane, so the old local blob is
+# read exactly once, by the desktop half, only to seed a host that has nothing
+# stored yet.
+#
+# The allowed values mirror the enums in desktop/plugin.js (`TITLE_LANGUAGES`,
+# `WINDOW_DAYS`, `ALERT_DELIVERIES`, `DIGEST_HOURS`). Each side pins its own copy
+# in its own suite, so a drift fails a test instead of a user's pane.
+SETTINGS_KEY = "settings"
+
+SETTINGS_ENUMS: Dict[str, Tuple[Any, ...]] = {
+    "defaultFilter": ("today", "week", "list"),
+    "titleLanguage": ("english", "romaji", "native"),
+    "windowDays": (3, 7, 14),
+    "alertDelivery": ("local", "telegram", "discord"),
+    # A completed or dropped show cannot air; the digest hour is the moment of the
+    # host's own day, since that is where the cron job fires.
+    "digestHour": (8, 9, 12, 20),
+}
+SETTINGS_FLAGS = ("covers",)
+# Free text: the destination is remembered as `connectionId:profile`, so it is
+# longer than a connection id but never a document.
+SETTINGS_TEXT: Dict[str, int] = {"alertRoute": 120}
+
+
+def _settings() -> Dict[str, Any]:
+    """Stored preferences, or an empty mapping when the host has none.
+
+    An unreadable or corrupt store answers empty rather than raising: a device
+    that cannot read a preference must fall back to its defaults, not lose the
+    pane.
+    """
+    try:
+        stored = _state_door().get(SETTINGS_KEY, None)
+    except Exception:  # noqa: BLE001 - a state store that cannot answer holds no preferences
+        return {}
+
+    if not isinstance(stored, dict):
+        return {}
+
+    return {str(key): value for key, value in stored.items()}
+
+
+def _save_settings(values: Dict[str, Any]) -> Dict[str, Any]:
+    _state_door().set(SETTINGS_KEY, values)
+
+    return values
+
+
+def _check_enum(key: str, value: Any, allowed: Tuple[Any, ...]) -> Any:
+    """One enum member, or a 422 naming the accepted set.
+
+    Booleans are refused outright: ``True`` compares equal to ``1``, and a
+    preference stored as the wrong type would render as a value nobody chose.
+    """
+    if isinstance(value, bool):
+        raise HTTPException(status_code=422, detail=f"{key} must be one of {', '.join(map(str, allowed))}")
+
+    if isinstance(allowed[0], int):
+        if not isinstance(value, (int, float)) or int(value) != value:
+            raise HTTPException(status_code=422, detail=f"{key} must be one of {', '.join(map(str, allowed))}")
+        value = int(value)
+
+    if value not in allowed:
+        raise HTTPException(status_code=422, detail=f"{key} must be one of {', '.join(map(str, allowed))}")
+
+    return value
+
+
+def clean_settings(patch: Dict[str, Any]) -> Dict[str, Any]:
+    """The part of a partial save this backend can store.
+
+    Unknown keys are DROPPED, not refused: a newer desktop that sends a key this
+    build has never heard of must not lose the rest of its save — the same reason
+    an unknown entry filter answers everything. A known key with a value outside
+    its enum IS refused: storing it would leave every device rendering a
+    preference nobody chose.
+    """
+    clean: Dict[str, Any] = {}
+
+    for key, value in (patch or {}).items():
+        if key in SETTINGS_FLAGS:
+            if not isinstance(value, bool):
+                raise HTTPException(status_code=422, detail=f"{key} must be true or false")
+            clean[key] = value
+        elif key in SETTINGS_ENUMS:
+            clean[key] = _check_enum(key, value, SETTINGS_ENUMS[key])
+        elif key in SETTINGS_TEXT:
+            if not isinstance(value, str) or len(value) > SETTINGS_TEXT[key]:
+                raise HTTPException(status_code=422, detail=f"{key} must be a string of at most {SETTINGS_TEXT[key]} characters")
+            clean[key] = value
+
+    return clean
+
+
 # ─── account (AniList sign-in) ───────────────────────────────────────────────
 
 # The token is a credential, so it lives where Hermes keeps credentials: the
@@ -1403,6 +1502,70 @@ async def watchlist_delete(media_id: int = Path(..., ge=1)) -> Dict[str, Any]:
         _save_watchlist(entries)
 
     return {"id": media_id, "removed": removed}
+
+
+# ─── settings routes ─────────────────────────────────────────────────────────
+
+
+class SettingsPatch(BaseModel):
+    """A partial save: only the keys the user actually changed.
+
+    Every field is optional so one toggle stores without every other preference
+    riding along — the same rule the watchlist PUT follows. An explicit ``null``
+    is not "clear it": it falls through to validation like any other bad value.
+
+    Values are refused rather than coerced. Pydantic's lax mode reads the string
+    ``"yes"`` as ``True``, and a preference stored from a guess is a preference
+    nobody chose — the pane would then render a choice the reader never made.
+    """
+
+    covers: Optional[StrictBool] = None
+    defaultFilter: Optional[str] = None
+    titleLanguage: Optional[str] = None
+    windowDays: Optional[int] = None
+    alertDelivery: Optional[str] = None
+    alertRoute: Optional[str] = Field(None, max_length=SETTINGS_TEXT["alertRoute"])
+    digestHour: Optional[int] = None
+
+    @field_validator("windowDays", "digestHour", mode="before")
+    @classmethod
+    def _numbers_are_sent_as_numbers(cls, value: Any) -> Any:
+        """Text is not an hour. A float IS accepted — JSON has one number type."""
+        if isinstance(value, (str, bool)) or value is None:
+            raise ValueError("must be sent as a number")
+
+        return value
+
+
+@router.get("/settings")
+async def settings_get() -> Dict[str, Any]:
+    """The host's stored preferences — and the desktop half's mount probe.
+
+    A device registers the chip, the palette commands and the panes only while
+    this route answers on its ACTIVE connection, so an answer here doubles as the
+    proof that the plugin is installed on the host being read. An empty mapping is
+    a normal answer: the host is here, nobody has chosen anything yet.
+    """
+    return {"settings": _settings()}
+
+
+@router.put("/settings")
+async def settings_put(patch: SettingsPatch) -> Dict[str, Any]:
+    """Merge one partial save into the host's preferences and return the result.
+
+    The answer is what the store now holds, not what was sent: a newer desktop
+    that sends a key this build drops sees the drop instead of believing a
+    preference was saved. A save that changes nothing stores nothing — a device
+    re-sending what the host already has must not rewrite the file.
+    """
+    stored = _settings()
+    provided = clean_settings(patch.model_dump(exclude_unset=True))
+    merged = {**stored, **provided}
+
+    if any(stored.get(key) != value for key, value in provided.items()):
+        _save_settings(merged)
+
+    return {"settings": merged}
 
 
 # ─── account routes ──────────────────────────────────────────────────────────

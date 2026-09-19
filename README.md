@@ -11,9 +11,10 @@ the tests and this README — was developed with
 owner and running mostly on **`deepseek-v4.1-flash`**. The taste, the screenshots and the bug reports
 are human; the code is not.
 
-> **Status: 0.8.0.** The pane, the AniList backend (read *and* write), the pin-flow sign-in, the cron
-> alerts, the daily digest and the two agent tools all work today. Next: the catalog PR (which opens
-> once the pinned commit is two weeks old) and the agent's writing tools.
+> **Status: 0.9.0.** The pane, the AniList backend (read *and* write), the pin-flow sign-in, the cron
+> alerts, the daily digest, the two agent tools, and the multi-host model — one install on the host,
+> the chip on every device that connects. Next: the catalog PR (which opens once the pinned commit is
+> two weeks old) and the agent's writing tools.
 
 ---
 
@@ -392,6 +393,10 @@ Desktop-half edits hot-reload: save `desktop/plugin.js` and the app picks it up.
   weeks old, and each later release is a pin-bump PR); editing the score (which needs the account's own
   scale, `User.mediaListOptions.scoreFormat`); and `anilist_mark`, `anilist_remove`, `anilist_airing`,
   `anilist_stats` and `anilist_recommend` for the agent.
+- [x] **L7 · multi-host** — the surface gate: the chip, the palette commands and the panes register only
+  while the plugin's own backend answers on the connection the reader is on, so a device pointed at a
+  host without the plugin shows nothing; the preferences moved to the host, so one install serves every
+  device. (`0.9.0`)
 
 What `1.0.0` means here: updating never breaks your settings or your list — stable backend routes,
 stable tool and manifest names, a preference shape validated by the host (unknown keys are dropped, a

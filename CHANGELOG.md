@@ -8,6 +8,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
+- _Nothing yet._
+
+## [0.9.0] - 2026-09-19
+
+### Added
+
 - **The surface follows the host.** The desktop half now registers its chip, palette commands and panes
   only while its own backend answers on the **active connection** (`/settings` is the probe), and
   removes them the moment it stops: a device pointed at a backend without the plugin shows nothing at

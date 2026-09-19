@@ -9,6 +9,7 @@ respect is written down here or in the README's *How it works* section.
 git clone https://github.com/BatataBF/hermes-anilist.git && cd hermes-anilist
 uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q   # offline: no network
 node tools/test_plugin_helpers.mjs
+node tools/test_plugin_gate.mjs
 python3 tools/lint_plugin_js.py desktop/plugin.js
 hermes plugins validate "$(pwd)"            # the same gate the plugin catalog CI runs
 hermes plugins update hermes-anilist        # materialize an edit in the installed copy
@@ -40,6 +41,15 @@ Keep these unless a change documents and tests a different security model:
 - **English in the repo, translations through `STRINGS.es`.** Labels, comments, commits, changelog
   entries. `tools/i18n_audit.mjs desktop/plugin.js` keeps the two locales in step.
 - **No credential in a cron job.** Alerts carry a prompt and ids; the job asks AniList itself.
+- **The host owns everything durable.** The watchlist, the preferences and the token live in the host's
+  plugin state and its profile `.env`. The desktop half keeps only the last answer it was given, and
+  the one local blob it reads is the pre-host settings copy, once, to seed a host that has none. Never
+  add a second durable store on a device: two devices that each keep one drift apart silently, and the
+  reader has no way to tell which is right.
+- **The surface follows the host.** Contributions register only while the plugin's own backend answers
+  on the active connection (`syncSurface`), and a failed probe is read as a host without the plugin
+  (404 → gone) or a host that is merely down (bounded retry). A contribution registered any other way
+  would put this plugin's UI on machines and hosts that never installed it.
 
 ## Test placement
 
@@ -47,17 +57,19 @@ Mirror what is under test, not the file layout:
 
 | File | Owns |
 |---|---|
-| `tests/test_plugin_api.py` | the routes: payload normalization, caching, the store decision |
+| `tests/test_plugin_api.py` | the routes: payload normalization, caching, the store decision, and the host's preference store (merge, enum refusal, forward-compat drops) |
 | `tests/test_agent_reads.py` | the reads the tools and the routes share, against trimmed real payloads |
 | `tests/test_agent_tools.py` | registration, the dispatcher contract, the shape a handler returns |
-| `tools/test_plugin_helpers.mjs` | the desktop half's pure helpers (no app, no React) |
+| `tools/test_plugin_helpers.mjs` | the desktop half's pure helpers (no app, no React) — including what a failed probe means for a surface already on screen |
+| `tools/test_plugin_gate.mjs` | the surface gate in motion: which host grows the surface, switching away and back, the stale answer from a host the reader left, and the one-shot seed of a host's preferences (no app, no React) |
 | `tools/test_plugin_views.mjs` | the show page's views rendered headless (needs React — see its header) |
 
 ## Pull request checklist
 
 - [ ] `uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q` — passes.
 - [ ] `uvx ruff check .` — passes (config in `ruff.toml`; it checks for bugs, not for taste).
-- [ ] `node tools/test_plugin_helpers.mjs` and `node tools/i18n_audit.mjs desktop/plugin.js` — pass.
+- [ ] `node tools/test_plugin_helpers.mjs`, `node tools/test_plugin_gate.mjs` and
+  `node tools/i18n_audit.mjs desktop/plugin.js` — pass.
 - [ ] `python3 tools/lint_plugin_js.py desktop/plugin.js` — every identifier is declared.
 - [ ] `node tools/class_audit.mjs` — every class exists in the installed app's stylesheet.
 - [ ] `hermes plugins validate "$(pwd)"` — validates, with no declared-vs-registered warning.

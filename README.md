@@ -68,35 +68,90 @@ surface and theme are recorded in [`docs/screenshots/manifest.json`](docs/screen
 
 ## Install
 
+Two halves, two places. **Which install you run decides what you get**, so read the table before the
+commands — a single install no longer covers both:
+
+| You want | Install on | Command |
+|---|---|---|
+| The tools, the data, the account, the alerts — `anilist_list`, the feed, your watchlist, the digest | **The host that serves your sessions**: this machine's Hermes, or the VPS / SSH box you connect to | `hermes plugins install BatataBF/hermes-anilist` then `hermes plugins enable hermes-anilist` |
+| The chip, the popover, the workspace tab | **Every machine that runs Hermes Desktop** (they each load UI from their own disk) | `hermes plugins install BatataBF/hermes-anilist --no-enable` |
+
+The plugin appears in **Capabilities → Plugins** on both, and it is opt-in on both sides: the agent
+half needs its `plugins.enabled` entry, the desktop half its toggle in that list.
+
+### 1. On the host — once
+
+Wherever your sessions run. The agent half is the half that holds anything: the watchlist, the
+preferences, the AniList token and the alert jobs all live **on that host**, and every device that
+connects reads them from there.
+
 ```bash
-# From the repository (works today)
-hermes plugins install BatataBF/hermes-anilist
+hermes plugins install BatataBF/hermes-anilist     # or: ... --enable, to skip the prompt
 hermes plugins enable hermes-anilist
 ```
 
-Once the catalog entry lands, the same install by name:
+Then restart that host's backend — both halves register at startup, so a running session keeps the old
+code until then (Desktop: quit and reopen the app; CLI or gateway: `hermes gateway restart`).
+
+On an SSH or remote-gateway connection, this is the install that makes the tools and the routes exist
+in those sessions. Nothing else is needed there: the chip is not the host's business.
+
+Once the catalog entry lands, the same install by name — it resolves to the reviewed, pinned commit:
 
 ```bash
-hermes plugins install hermes-anilist    # resolves to the reviewed, pinned commit
+hermes plugins install hermes-anilist
 hermes plugins enable hermes-anilist
 ```
+
+### 2. On each device that runs the app — once
+
+The desktop half is a plain JavaScript file the app loads **from the machine it runs on**. There is no
+remote-source door (a plugin runs with the app's own authority, so loading it from a host you merely
+connected to would be remote code execution — Hermes does not do that), which is why each device needs
+the file once:
+
+```bash
+hermes plugins install BatataBF/hermes-anilist --no-enable
+```
+
+`--no-enable` is the point: it drops the package — which is what carries the desktop half — **without
+enabling the agent half on that device**. No second watchlist, no second token, no second set of alert
+jobs; the device is a reader, the host stays the owner.
 
 Then, in Hermes Desktop:
 
-1. **⌘K → Reload desktop plugins** — the desktop half is loaded by the app and is opt-in.
-2. **Capabilities → Plugins** — check that **hermes-anilist** is there and enabled.
+1. **⌘K → Reload desktop plugins** — the desktop half is opt-in and the app has to be told to look.
+2. **Capabilities → Plugins** — flip the **Desktop** toggle on the `hermes-anilist` row.
 3. The chip appears in the status bar. Click it.
 
-Updating, after a new release:
+**Install from Git** (the app's own dialog, reachable from that same page, or with the one-click link
+`hermes://plugin/install?repo=BatataBF/hermes-anilist`) does the same thing without a local package:
+tick only the **Desktop** target. It is the friendlier route for a device you rarely touch, and the
+lesser one for a device you keep: without a package there, the row cannot be paired with the host's
+half and `hermes plugins update` has nothing to refresh.
 
-```bash
-hermes plugins update hermes-anilist   # pull the release into the installed checkout
-```
+### 3. The surface follows the host
 
-Then restart the backend (Desktop: quit and reopen the app; CLI/gateway: `hermes gateway restart`) —
-both halves register at startup, so a running session keeps the old code until then.
+The app loads the desktop half wherever it runs; what that half **shows** belongs to the host. It
+registers the chip, the palette commands and the panes only while its own backend answers on the
+connection you are on — so a device pointed at a backend without the plugin shows **nothing at all**
+(no chip, no commands, no empty state), and grows the whole surface the moment you switch to one that
+has it. Switch back and it is gone again.
 
-If you want Hermes to replace the directory from the repository instead of pulling into it:
+That is the whole point of the split: **install once on the host, drop the file on each device once,
+and no device ever needs a second setup.** Say it the other way round — you never have to keep two
+machines in step, because there is only ever one of everything: one watchlist, one credential, one set
+of jobs, one set of preferences.
+
+### 4. Updating
+
+| Where | Command |
+|---|---|
+| The host | `hermes plugins update hermes-anilist`, then restart its backend |
+| Each device | `hermes plugins update hermes-anilist` (refreshes its copy of the desktop half; the app picks it up on the next reload) |
+
+A new release is one `update` per machine that has the file. To have Hermes replace the directory from
+the repository instead of pulling into it:
 
 ```bash
 hermes plugins install BatataBF/hermes-anilist --force --enable
@@ -117,13 +172,29 @@ force-reinstalls at the reviewed commit.
 > **uninstallable** from the Desktop dialog and from `hermes plugins install`. Install by
 > `owner/repo` and let Hermes manage its own checkout.
 
-### Where it runs
+### Where it runs: what follows the host, what follows the machine
 
-The plugin halves load in the **backend** that serves your session. On Desktop that is usually the
-app-managed local backend; if you point Hermes at another host (an SSH gateway, a VPS), the plugin
-must be installed there too for the chip and the tools to exist in those sessions. Alerts and the
-digest are different: they are cron jobs, so they run on the host you pick, whether or not that host
-has the plugin.
+The split is worth knowing by heart, because every "where did my plugin go?" answer is in it:
+
+| | Agent half | Desktop half |
+|---|---|---|
+| Lives in | the **host**'s `plugins/hermes-anilist/` | each machine's `desktop-plugins/hermes-anilist/` |
+| Holds | tools, `/api/plugins/hermes-anilist/` routes, watchlist, preferences, token, alert jobs | the chip, the popover, the workspace tab, palette commands |
+| Follows | the **connection** you are on (per profile, on that host) | the **machine**, not the connection — one copy per app install, deliberately not per-profile (a half that came and went with the selected profile read as "my plugin vanished") |
+| Check it with | `hermes plugins show hermes-anilist` on that host | Capabilities → Plugins, next to the app that loads it |
+
+Two consequences worth knowing up front:
+
+- **Preferences live with the host; nothing durable lives on a device.** Title language, window,
+  digest hour and the destination are stored in the host's plugin state, so they are the same on every
+  device that connects, and a device keeps only the last answer it was given. The AniList token is the
+  same story: signing in from the pane writes it to the profile `.env` of the **host serving that
+  connection** — which is why a device never holds a credential, and why signing in twice is signing
+  in on two hosts, not twice on one.
+- **Alerts and the digest are cron jobs, created through the active connection.** They fire on the
+  host that serves that session, whether or not the plugin is installed there, and they show up in
+  `hermes cron list` on that host. Create them while you are connected to the host that should own
+  them.
 
 ## Set up your AniList account
 
@@ -171,7 +242,7 @@ With the plugin enabled the model gets two tools, and they only read:
 
 Rules the tools follow, and the reason they are trustworthy:
 
-- **Every answer names the list it read** — your AniList account's, or this device's when you are
+- **Every answer names the list it read** — your AniList account's, or the host's own when you are
   signed out. `store: anilist` vs `store: local`.
 - **`null` is not zero.** A show AniList has no score for reports `null`, and a score you never set
   is not invented.
@@ -323,9 +394,9 @@ Desktop-half edits hot-reload: save `desktop/plugin.js` and the app picks it up.
   `anilist_stats` and `anilist_recommend` for the agent.
 
 What `1.0.0` means here: updating never breaks your settings or your list — stable backend routes,
-stable tool and manifest names, and a pin in the catalog that moves only through a reviewed PR. There is
-no server-side config schema to freeze: every preference is client-side, in the desktop half's own
-storage, precisely so a future version can add one without migrating anyone.
+stable tool and manifest names, a preference shape validated by the host (unknown keys are dropped, a
+value outside its enum is refused) so a newer desktop half can add one without migrating anyone, and a
+pin in the catalog that moves only through a reviewed PR.
 
 ## Changelog
 

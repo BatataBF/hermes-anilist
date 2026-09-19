@@ -8,6 +8,27 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
+- **The surface follows the host.** The desktop half now registers its chip, palette commands and panes
+  only while its own backend answers on the **active connection** (`/settings` is the probe), and
+  removes them the moment it stops: a device pointed at a backend without the plugin shows nothing at
+  all, and grows the whole surface when it switches to one that has it. That is what makes the
+  multi-device setup literal — install once on the host, drop the file on each device once, and no
+  device ever needs a second setup. A failed probe is read for what it is: a 404 takes the surface away
+  at once (the plugin is not on that host), while an unreachable host keeps what is on screen and gets
+  a bounded retry (twice, five seconds apart — never a poll loop).
+- **Preferences belong to the host, not to the device.** Title language, window, filter, covers,
+  destination and digest hour are stored in the host's plugin state through `GET`/`PUT /settings`, so
+  every device that connects reads the same choices; a device keeps only the last answer it was given
+  and snaps back to it when a save fails (with a toast, because a preference the host did not store
+  must not look stored). The backend validates: a value outside its enum is refused with the accepted
+  set, a string is not coerced into a number or a `true`, and a key a newer desktop sends that this
+  build does not know is dropped rather than costing the whole save. An existing device-local settings
+  blob is migrated exactly once, to seed a host that has nothing stored — after that the host's copy is
+  the only one.
+- **Two test surfaces for the new behaviour**: `tools/test_plugin_gate.mjs` drives the gate without the
+  app (host with the plugin, host without it, switching back, a late answer from a host the reader
+  left, a device seeding a fresh host, a host whose preferences are never overwritten by leftovers), and
+  `tests/test_plugin_api.py` gained eleven cases for the preference store.
 - **A screenshot gallery in the README** (`docs/screenshots/`) with a `manifest.json` recording each
   image's surface, theme and window size — the chip's popover, the Catalog tab, and a show's page. Taken
   from the app on a real account: no mock data, and nothing credential-shaped in frame.
@@ -32,6 +53,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Changed
 
+- **The README's install section was rebuilt around where each half lives.** It opens with the choice —
+  the host gets the agent half (tools, data, account, alerts), each device that runs the app gets the
+  file that carries the desktop half (`--no-enable`, so a device holds no state of its own) — then the
+  one-shot steps per place, the *surface follows the host* rule, and an update row per machine. The old
+  text had one install path and left the split to a later section, which is how a reader ends up
+  installing only on the VPS and waiting for a chip that cannot arrive.
+- **`CONTRIBUTING.md` gained the two invariants the split depends on** — the host owns everything
+  durable, and the surface follows the host — plus the gate test in the loop, the placement table and
+  the PR checklist.
 - **The catalog submission moved out of the README.** It is maintainer-facing process, not a feature a
   reader needs: it lives in [`CONTRIBUTING.md`](CONTRIBUTING.md) now (the checklist, the entry file, the
   two-week pin rule and how a release bumps the pin), and the README keeps a one-line pointer. Nothing in

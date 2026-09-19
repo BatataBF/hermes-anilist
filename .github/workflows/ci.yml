@@ -4,7 +4,8 @@ name: CI
 #   hermes plugins validate .        ← the same validator this workflow runs
 #   uvx ruff check .                 ← the lint step below
 #   uv run --with pytest --with httpx --with fastapi --quiet pytest tests/ -q
-#   node tools/test_plugin_helpers.mjs && node tools/i18n_audit.mjs desktop/plugin.js
+#   node tools/test_plugin_helpers.mjs && node tools/test_plugin_gate.mjs
+#   node tools/i18n_audit.mjs desktop/plugin.js
 on:
   push:
     branches: ["**"]
@@ -89,8 +90,10 @@ jobs:
       - name: pytest
         run: pytest tests/ -q
 
-      # The desktop half's pure helpers and i18n parity (Node is on the runner).
-      - name: Desktop half — helpers and locale parity
+      # The desktop half's pure helpers, the surface gate, and i18n parity
+      # (Node is on the runner).
+      - name: Desktop half — helpers, gate and locale parity
         run: |
           node tools/test_plugin_helpers.mjs
+          node tools/test_plugin_gate.mjs
           node tools/i18n_audit.mjs desktop/plugin.js

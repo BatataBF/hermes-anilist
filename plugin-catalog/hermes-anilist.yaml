@@ -5,20 +5,27 @@
 # admission is a pull request adding `plugin-catalog/hermes-anilist.yaml` with
 # exactly these contents. Checklist: that repo's plugin-catalog/README.md.
 #
-#   sha     the reviewed commit — the v0.9.0 release tag's commit, not HEAD.
-#           Bump it in the same PR that bumps `version`, and never point it at a
-#           branch: the pin IS the trust model, and the reviewer reads the diff
-#           of the commit range being adopted. Quote it: an all-digit SHA
-#           unquoted is a YAML number and the loader rejects it. There is no
-#           minimum pin age: the 2-week maturity rule this entry was waiting on
-#           was replaced upstream by the no-self-updater rule (hermes-agent
-#           48763a4d01, 2026-09-15), so admission turns on the pin not being
-#           able to move itself — which this plugin has never done.
+#   sha     the commit that was reviewed — the v0.9.0 code plus the catalog docs
+#           cleanup, not HEAD at any later moment. Bump it in the same PR that
+#           bumps `version`, and never point it at a branch: the pin IS the trust
+#           model. Quote it: an all-digit SHA unquoted is a YAML number and the
+#           loader rejects it.
+#           There is no minimum pin age: the 2-week maturity rule this entry was
+#           waiting on was replaced upstream by the no-self-updater rule
+#           (hermes-agent 48763a4d01, 2026-09-15), so admission turns on the pin
+#           not being able to move itself — which this plugin has never done.
+#           This pin is deliberately the docs-cleanup commit and not the v0.9.0
+#           tag commit: `/docs/plugins/<name>` renders the README *at the pinned
+#           sha*, so pinning the tag would publish a page still promising the PR
+#           "once the pinned commit is two weeks old". The two commits differ in
+#           documentation only — `git diff v0.9.0..<sha> --stat` touches nothing
+#           the plugin runs — which is why `version` stays 0.9.0: the code at
+#           this pin IS the 0.9.0 release.
 #   image   optional 2:1 banner on a GitHub host, pinned to `sha` so it cannot
 #           change under the review (not added yet — the card falls back to text).
 name: hermes-anilist
 repo: https://github.com/BatataBF/hermes-anilist
-sha: "f65b3ede0f50b50f42a2049234b01d8c1f14c743"
+sha: "0081dfd7b45a469eef1ec35d3d0797318694c640"
 description: AniList tracker for Hermes Desktop — airing countdowns, a season browser, a local or
   account-backed watchlist, episode alerts and a daily digest, plus agent tools that read your own
   list and answer about a single show.

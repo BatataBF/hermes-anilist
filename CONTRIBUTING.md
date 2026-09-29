@@ -98,7 +98,7 @@ The policy is hermes-agent's `plugin-catalog/README.md`; the user-facing side is
 | Owner-submitted PR | BatataBF owns the repo |
 | Public repository | `github.com/BatataBF/hermes-anilist` |
 | Real releases/tags, not just a branch | annotated tags per release — `v0.8.0`, `v0.9.0`, … |
-| Exact 40-hex SHA pin | pinned to the `v0.9.0` commit — the release tag's commit, never a branch tip |
+| Exact 40-hex SHA pin | pinned to the catalog-docs commit on top of `v0.9.0` — documentation only, never a branch tip |
 | Not self-updating | no updater in the plugin: `hermes plugins update` is the only path |
 | Declared capabilities match reality | `hermes plugins validate` passes (2 declared tools, 2 registered) |
 | Admission validation green | `.github/workflows/ci.yml` runs the same validator on every push |

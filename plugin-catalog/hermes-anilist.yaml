@@ -5,16 +5,20 @@
 # admission is a pull request adding `plugin-catalog/hermes-anilist.yaml` with
 # exactly these contents. Checklist: that repo's plugin-catalog/README.md.
 #
-#   sha     the reviewed commit — the v0.8.0 release tag's commit, not HEAD.
+#   sha     the reviewed commit — the v0.9.0 release tag's commit, not HEAD.
 #           Bump it in the same PR that bumps `version`, and never point it at a
 #           branch: the pin IS the trust model, and the reviewer reads the diff
 #           of the commit range being adopted. Quote it: an all-digit SHA
-#           unquoted is a YAML number and the loader rejects it.
+#           unquoted is a YAML number and the loader rejects it. There is no
+#           minimum pin age: the 2-week maturity rule this entry was waiting on
+#           was replaced upstream by the no-self-updater rule (hermes-agent
+#           48763a4d01, 2026-09-15), so admission turns on the pin not being
+#           able to move itself — which this plugin has never done.
 #   image   optional 2:1 banner on a GitHub host, pinned to `sha` so it cannot
 #           change under the review (not added yet — the card falls back to text).
 name: hermes-anilist
 repo: https://github.com/BatataBF/hermes-anilist
-sha: "77ada126d8726994e674a33884e324fb532b7fcb"
+sha: "f65b3ede0f50b50f42a2049234b01d8c1f14c743"
 description: AniList tracker for Hermes Desktop — airing countdowns, a season browser, a local or
   account-backed watchlist, episode alerts and a daily digest, plus agent tools that read your own
   list and answer about a single show.
@@ -23,7 +27,7 @@ tier: community
 category: desktop
 requires_hermes: ">=0.21"
 docs_url: https://github.com/BatataBF/hermes-anilist#readme
-version: "0.8.0"
+version: "0.9.0"
 platforms: []
 capabilities:
   # Must match what register(ctx) actually does at `sha`: `hermes plugins

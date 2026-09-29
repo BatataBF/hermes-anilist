@@ -6,9 +6,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- _Nothing yet._
+- **The catalog entry is pinned to `0.9.0`, and nothing waits on an age rule.** Admission used to
+  require a pinned commit at least two weeks old; hermes-agent replaced that with a no-self-updater
+  rule, so there is no minimum pin age and the submission is gated only by the pull request. The entry
+  now points at the `v0.9.0` release commit — which is also the commit its plugin page renders the
+  README from, so the page describes the multi-host model rather than the release before it.
 
 ## [0.9.0] - 2026-09-19
 

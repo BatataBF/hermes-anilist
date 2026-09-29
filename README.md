@@ -13,8 +13,8 @@ are human; the code is not.
 
 > **Status: 0.9.0.** The pane, the AniList backend (read *and* write), the pin-flow sign-in, the cron
 > alerts, the daily digest, the two agent tools, and the multi-host model — one install on the host,
-> the chip on every device that connects. Next: the catalog PR (which opens once the pinned commit is
-> two weeks old) and the agent's writing tools.
+> the chip on every device that connects. Next: the catalog PR — the entry is pinned to the `v0.9.0`
+> release commit and ready to submit — and the agent's writing tools.
 
 ---
 
@@ -389,9 +389,10 @@ Desktop-half edits hot-reload: save `desktop/plugin.js` and the app picks it up.
   and the episode table; the chip that follows your own list; `anilist_list` + `anilist_show` and
   their skill; the README as a front door; CI on every push; the catalog entry, pinned and ready.
   (`0.8.0`)
-- [ ] **L6 · catalog and writing tools** — the catalog entry merged (the PR opens once the pin is two
-  weeks old, and each later release is a pin-bump PR); editing the score (which needs the account's own
-  scale, `User.mediaListOptions.scoreFormat`); and `anilist_mark`, `anilist_remove`, `anilist_airing`,
+- [ ] **L6 · catalog and writing tools** — the catalog entry merged (the pull request is the only gate
+  left: there is no minimum pin age, the entry is pinned to the `v0.9.0` release commit, and each later
+  release is a pin-bump PR); editing the score (which needs the account's own scale,
+  `User.mediaListOptions.scoreFormat`); and `anilist_mark`, `anilist_remove`, `anilist_airing`,
   `anilist_stats` and `anilist_recommend` for the agent.
 - [x] **L7 · multi-host** — the surface gate: the chip, the palette commands and the panes register only
   while the plugin's own backend answers on the connection the reader is on, so a device pointed at a

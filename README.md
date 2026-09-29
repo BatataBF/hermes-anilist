@@ -11,6 +11,11 @@ the tests and this README — was developed with
 owner and running mostly on **`deepseek-v4.1-flash`**. The taste, the screenshots and the bug reports
 are human; the code is not.
 
+![The chip and its popover: the airing feed sectioned by local day, a row's hover action, and the two doors out to the workspace and Settings](docs/screenshots/popover-upcoming.png)
+
+A `1.90:1` capture of the app itself — the status-bar chip open, on a real account and a real list.
+The other two surfaces are in [Screenshots](#screenshots).
+
 > **Status: 0.9.0.** The pane, the AniList backend (read *and* write), the pin-flow sign-in, the cron
 > alerts, the daily digest, the two agent tools, and the multi-host model — one install on the host,
 > the chip on every device that connects. Next: the catalog PR — the entry is pinned to the `v0.9.0`

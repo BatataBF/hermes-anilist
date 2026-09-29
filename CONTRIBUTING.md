@@ -102,6 +102,7 @@ The policy is hermes-agent's `plugin-catalog/README.md`; the user-facing side is
 | Not self-updating | no updater in the plugin: `hermes plugins update` is the only path |
 | Declared capabilities match reality | `hermes plugins validate` passes (2 declared tools, 2 registered) |
 | Admission validation green | `.github/workflows/ci.yml` runs the same validator on every push |
+| Banner for the card and page hero | `image:` in the entry, pinned to the same commit as `sha` |
 | Security scan clean | `hermes plugins validate` reports `safe`; no `tools.override`, no LLM access |
 
 **To submit**: open a PR against `NousResearch/hermes-agent` adding `plugin-catalog/hermes-anilist.yaml`

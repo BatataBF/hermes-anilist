@@ -8,14 +8,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Changed
 
-- **The catalog entry is pinned to a docs-clean commit over `0.9.0`, and nothing waits on an age
-  rule.** Admission used to require a pinned commit at least two weeks old; hermes-agent replaced that
-  with a no-self-updater rule, so there is no minimum pin age and the submission is gated only by the
-  pull request. The entry points at the catalog-docs commit sitting on top of the `v0.9.0` release,
-  rather than the tag commit itself, because `/docs/plugins/<name>` renders the README *at the pinned
-  sha*: pinning the tag would publish a page still promising the PR "once the pinned commit is two
-  weeks old". The two commits differ in documentation only — nothing the plugin runs — so the pin still
-  ships exactly the `0.9.0` code.
+- **The catalog entry now carries a banner, and the README leads with the visual.** The entry declares
+  `image:` — the catalog card and the plugin page's hero, pinned to the same commit as the code so it
+  cannot change under the review. It is the *only* source of that hero, which is why the README also
+  opens with the status-bar capture now: an image near the top of a README does not become a hero, so
+  neither mechanism substitutes for the other. No `screenshots:` list: that fills a separate gallery
+  from the entry, only about 4% of entries declare one, and the README's own table already shows all
+  three captures.
 
 ## [0.9.0] - 2026-09-19
 
